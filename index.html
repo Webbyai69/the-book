@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Book</title>
+<meta name="description" content="The Book — live entertainment, booked simply. Find local bands, musicians and DJs, check availability and book them for your venue.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="shell hdr-row">
+    <div class="brand">
+      <img class="brand-mark" src="./assets/book-mark.jpg" alt="The Book harp roundel">
+      <span>
+        <span class="brand-name">the book</span>
+        <span class="brand-motto">Find · Book · Play</span>
+      </span>
+    </div>
+    <div class="hdr-actions">
+      <span class="who-chip" id="whoChip"></span>
+      <div class="role-switch" role="group" aria-label="Choose your role">
+        <button id="roleVenue" class="on" type="button">Venue</button>
+        <button id="roleArtist" type="button">Artist</button>
+      </div>
+      <button class="bell" id="bellBtn" type="button" aria-label="Notifications">
+        <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></svg>
+        <span class="badge zero" id="bellBadge">0</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="shell tabs-row">
+    <button class="tab on" data-view="home" type="button">Home</button>
+    <button class="tab" data-view="discover" type="button">Discover</button>
+    <button class="tab" data-view="calendar" type="button">Calendar</button>
+    <button class="tab" data-view="bookings" type="button">Bookings</button>
+    <button class="tab" data-view="profile" type="button">Profile</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ============ HOME ============ -->
+  <section class="view on" id="view-home">
+    <div class="hero">
+      <div class="shell hero-in">
+        <img class="hero-crest" src="./assets/book-logo.jpg" alt="The Book — gold Celtic harp roundel">
+        <div class="hero-copy">
+          <span class="motto">Find · Book · Play</span>
+          <h1>Live entertainment, booked simply</h1>
+          <p class="lede" id="homeLede">The Book connects venues with local bands, musicians and DJs — discovery, availability, booking and gig management in one place.</p>
+        </div>
+      </div>
+    </div>
+    <div class="shell">
+      <div class="home-grid">
+        <div class="home-col">
+          <h3 id="homeRecTitle">Recommended for you</h3>
+          <div class="grid" id="homeRec" style="grid-template-columns:1fr;gap:14px;"></div>
+        </div>
+        <div class="home-col">
+          <h3>Coming up</h3>
+          <div class="blist" id="homeUpcoming" style="margin-top:0;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DISCOVER ============ -->
+  <section class="view on" id="view-discover">
+    <div class="hero">
+      <div class="shell hero-in">
+        <img class="hero-crest" src="./assets/crest.jpg" alt="Lyons Den Promotions crest — harp, winged maiden and green lion under the motto Eirinn go Brach">
+        <div class="hero-copy">
+          <span class="motto">Éirinn go Brách</span>
+          <h1 id="heroTitle">Ireland's Stage for Traditional Music</h1>
+          <p class="lede" id="heroLede">Browse local bands, musicians and DJs, check their availability and book them for your venue — sessions, céilí nights, concerts and late sets.</p>
+        </div>
+      </div>
+    </div>
+    <div class="shell">
+      <form class="search" id="searchForm">
+        <div class="fld">
+          <label for="fCounty">Where</label>
+          <select id="fCounty">
+            <option value="">All of Ireland</option>
+            <option>Cork</option><option>Kerry</option><option>Clare</option><option>Galway</option>
+            <option>Dublin</option><option>Meath</option><option>Limerick</option><option>Donegal</option><option>Sligo</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label for="fDate">When</label>
+          <input id="fDate" type="date">
+        </div>
+        <div class="fld">
+          <label for="fType">Looking for</label>
+          <select id="fType">
+            <option value="">Any act</option>
+            <option>Band</option><option>Solo</option><option>Duo or trio</option><option>DJ</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label for="fStyle">Genre</label>
+          <select id="fStyle">
+            <option value="">Any genre</option>
+            <option>Rock</option><option>Pop</option><option>Country</option><option>Jazz</option>
+            <option>Indie</option><option>Electronic</option><option>Folk</option><option>Trad</option>
+          </select>
+        </div>
+        <button class="go" type="submit">Search</button>
+      </form>
+
+      <div class="sec-head">
+        <h2 id="listTitle">Artists Available Near You</h2>
+        <button class="btn btn-line add-btn" id="addBtn" type="button">Post a Gig Call</button>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="grid" id="resultGrid"></div>
+    </div>
+  </section>
+
+  <!-- ============ BOOKINGS ============ -->
+  <section class="view" id="view-bookings">
+    <div class="shell">
+      <div class="sec-head">
+        <h2 id="bkTitle">Your Bookings</h2>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="blist" id="bookingList"></div>
+    </div>
+  </section>
+
+  <!-- ============ PROFILE ============ -->
+  <section class="view" id="view-profile">
+    <div class="shell">
+      <div class="sec-head">
+        <h2>Your profile</h2>
+      </div>
+      <div class="profile-card">
+        <form class="frm" id="profForm">
+          <div class="f-full">
+            <label for="pfName">Name</label>
+            <input id="pfName" required>
+          </div>
+          <div>
+            <label for="pfCounty">County</label>
+            <select id="pfCounty"><option>Cork</option><option>Kerry</option><option>Clare</option><option>Galway</option><option>Dublin</option><option>Meath</option><option>Limerick</option><option>Donegal</option><option>Sligo</option></select>
+          </div>
+          <div>
+            <label for="pfType">Account type</label>
+            <input id="pfType" disabled>
+          </div>
+          <div class="f-full">
+            <label for="pfBio">About</label>
+            <textarea id="pfBio" placeholder="A short description shown to the other side of a booking"></textarea>
+          </div>
+          <div class="f-full"><button class="btn btn-gold" type="submit">Save Profile</button></div>
+        </form>
+        <p style="color:var(--faint);font-size:0.82rem;margin-top:16px;">Messaging in The Book stays attached to bookings — open any booking row and tap Message to talk to the other side.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CALENDAR ============ -->
+  <section class="view" id="view-calendar">
+    <div class="shell">
+      <div class="sec-head">
+        <h2>Gig Calendar</h2>
+      </div>
+      <div class="cal-head">
+        <h3 id="calTitle"></h3>
+        <div class="cal-nav">
+          <button class="btn btn-line" id="calPrev" type="button" aria-label="Previous month">Prev</button>
+          <button class="btn btn-line" id="calNext" type="button" aria-label="Next month">Next</button>
+        </div>
+      </div>
+      <div class="cal" id="calGrid"></div>
+      <div class="cal-legend"><span><i class="lg-b"></i>Booked</span><span><i class="lg-p"></i>Pending or awaiting finalization</span><span><i class="lg-f"></i>Free</span></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ BOOKING MODAL ============ -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="mTitle"></h3>
+        <p class="card-loc" id="mSub"></p>
+      </div>
+      <button class="x" id="mClose" type="button" aria-label="Close">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <p class="bio" id="mBio"></p>
+      <div class="tags" id="mTags" style="margin-top:10px;"></div>
+      <form class="frm" id="bookForm">
+        <div>
+          <label for="bDate">Date</label>
+          <input id="bDate" type="date" required>
+          <p id="bAvail" style="font-size:0.74rem;margin-top:5px;color:var(--faint);"></p>
+        </div>
+        <div>
+          <label for="bStart">Start</label>
+          <input id="bStart" type="time" value="21:00" required>
+        </div>
+        <div>
+          <label for="bFee">Offer</label>
+          <input id="bFee" type="number" min="0" step="10" required>
+        </div>
+        <div>
+          <label for="bEnd">Finish</label>
+          <input id="bEnd" type="time" value="23:00" required>
+        </div>
+        <div class="f-full">
+          <label for="bNote">Message to the artist</label>
+          <textarea id="bNote" placeholder="Tell them about your venue and the night you are planning"></textarea>
+        </div>
+        <div class="f-full">
+          <button class="btn btn-gold btn-wide" type="submit">Send Booking Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BOOKING CHAT MODAL ============ -->
+<div class="modal-bg" id="chatBg">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:560px;">
+    <div class="modal-head">
+      <div><h3 id="chatHead"></h3><p class="card-loc" id="chatSub">Conversation attached to this booking</p></div>
+      <button class="x" id="chatClose" type="button" aria-label="Close">&#215;</button>
+    </div>
+    <div class="modal-body" style="padding-top:6px;">
+      <div class="chat" style="border:none;background:none;">
+        <div class="chat-log" id="chatLog" style="padding:10px 0;"></div>
+        <form class="chat-in" id="chatForm" style="border-top:1px solid var(--hairline);">
+          <input id="chatInput" placeholder="Write a message" aria-label="Write a message">
+          <button class="btn btn-gold" type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REVIEW MODAL ============ -->
+<div class="modal-bg" id="revBg">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:520px;">
+    <div class="modal-head">
+      <div><h3>Rate this gig</h3><p class="card-loc" id="revSub"></p></div>
+      <button class="x" id="revClose" type="button" aria-label="Close">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <div class="stars" id="revStars">
+        <button type="button" data-s="1">&#9733;</button><button type="button" data-s="2">&#9733;</button><button type="button" data-s="3">&#9733;</button><button type="button" data-s="4">&#9733;</button><button type="button" data-s="5">&#9733;</button>
+      </div>
+      <form class="frm" id="revForm">
+        <div class="f-full"><label for="revNote">A line about the night</label><textarea id="revNote" placeholder="Professionalism, communication, performance, would you book again"></textarea></div>
+        <div class="f-full"><button class="btn btn-gold btn-wide" type="submit">Submit Review</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NOTIFICATIONS DRAWER ============ -->
+<aside class="drawer" id="drawer" aria-label="Notifications">
+  <div class="drawer-head">
+    <span>Notifications</span>
+    <button class="x" id="drawerClose" type="button" aria-label="Close">&#215;</button>
+  </div>
+  <div class="drawer-list" id="notifList"></div>
+</aside>
+
+<!-- ============ ONBOARDING ============ -->
+<div class="modal-bg" id="onbBg">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="onbTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="onbTitle">Welcome to The Book</h3>
+        <p class="card-loc">Set up this device to start booking. You can switch roles at any time to act as the other side.</p>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="onb-roles">
+        <button class="onb-role on" data-r="venue" type="button">I run a venue<span>Pubs, bars, restaurants, hotels, clubs</span></button>
+        <button class="onb-role" data-r="artist" type="button">I perform<span>Bands, solo acts, duos and DJs</span></button>
+      </div>
+      <form class="frm" id="onbForm">
+        <div class="f-full">
+          <label for="onbName">Your venue or act name</label>
+          <input id="onbName" required placeholder="For example: The Harbour Bar">
+        </div>
+        <div class="f-full">
+          <label for="onbCounty">County</label>
+          <select id="onbCounty"><option>Cork</option><option>Kerry</option><option>Clare</option><option>Galway</option><option>Dublin</option><option>Meath</option><option>Limerick</option><option>Donegal</option><option>Sligo</option></select>
+        </div>
+        <div class="f-full"><button class="btn btn-gold btn-wide" type="submit">Open The Book</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CREATE ARTIST PROFILE ============ -->
+<div class="modal-bg" id="newArtBg">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div><h3>Create Artist Profile</h3><p class="card-loc">Appears in the Discover list for venues.</p></div>
+      <button class="x" data-close="newArtBg" type="button" aria-label="Close">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <form class="frm" id="newArtForm">
+        <div class="f-full"><label for="naName">Act name</label><input id="naName" required></div>
+        <div><label for="naCounty">County</label><select id="naCounty"><option>Cork</option><option>Kerry</option><option>Clare</option><option>Galway</option><option>Dublin</option><option>Meath</option><option>Limerick</option><option>Donegal</option><option>Sligo</option></select></div>
+        <div><label for="naFee">Fee per night</label><input id="naFee" type="number" min="0" step="10" placeholder="Leave empty for POA"></div>
+        <div><label for="naType">Act type</label><select id="naType"><option>Band</option><option>Solo</option><option>Duo or trio</option><option>DJ</option></select></div>
+        <div><label for="naStyle">Main genre</label><select id="naStyle"><option>Rock</option><option>Pop</option><option>Country</option><option>Jazz</option><option>Indie</option><option>Electronic</option><option>Folk</option><option>Trad</option></select></div>
+        <div><label for="naExp">Years gigging</label><input id="naExp" type="number" min="0" max="60" placeholder="8"></div>
+        <div class="f-full"><label for="naBio">Short bio</label><textarea id="naBio" placeholder="What you play and what a venue can expect"></textarea></div>
+        <div class="f-full"><button class="btn btn-gold btn-wide" type="submit">Publish Profile</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CREATE GIG CALL ============ -->
+<div class="modal-bg" id="newGigBg">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div><h3>Post a Gig Call</h3><p class="card-loc">Appears in the Discover list for artists.</p></div>
+      <button class="x" data-close="newGigBg" type="button" aria-label="Close">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <form class="frm" id="newGigForm">
+        <div class="f-full"><label for="ngVenue">Venue name</label><input id="ngVenue" required></div>
+        <div><label for="ngCounty">County</label><select id="ngCounty"><option>Cork</option><option>Kerry</option><option>Clare</option><option>Galway</option><option>Dublin</option><option>Meath</option><option>Limerick</option><option>Donegal</option><option>Sligo</option></select></div>
+        <div><label for="ngDate">Date</label><input id="ngDate" type="date" required></div>
+        <div><label for="ngBudget">Budget</label><input id="ngBudget" type="number" min="0" step="10" placeholder="Leave empty for POA"></div>
+        <div><label for="ngStyle">Style wanted</label><select id="ngStyle"><option>Rock</option><option>Pop</option><option>Country</option><option>Jazz</option><option>Indie</option><option>Electronic</option><option>Folk</option><option>Trad</option></select></div>
+        <div class="f-full"><label for="ngBio">Details</label><textarea id="ngBio" placeholder="The night you are planning, set length, PA available"></textarea></div>
+        <div class="f-full"><button class="btn btn-gold btn-wide" type="submit">Post Gig Call</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FINALIZE MODAL ============ -->
+<div class="modal-bg" id="finBg">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="finTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="finTitle">Finalize Booking</h3>
+        <p class="card-loc" id="finSub"></p>
+      </div>
+      <button class="x" id="finClose" type="button" aria-label="Close">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <p class="bio">The artist accepted your request. Agree the final price and details to confirm the gig.</p>
+      <form class="frm" id="finForm">
+        <div>
+          <label for="finFee">Agreed price</label>
+          <input id="finFee" type="number" min="0" step="10" required>
+        </div>
+        <div>
+          <label for="finDep">Deposit</label>
+          <input id="finDep" type="number" min="0" step="10" value="0">
+          <p id="finBal" style="font-size:0.74rem;margin-top:5px;color:var(--faint);"></p>
+        </div>
+        <div>
+          <label for="finArr">Arrival</label>
+          <input id="finArr" type="time" value="19:30">
+        </div>
+        <div>
+          <label for="finSc">Soundcheck</label>
+          <input id="finSc" type="time" value="20:00">
+        </div>
+        <div class="f-full">
+          <label for="finNote">Final details</label>
+          <textarea id="finNote" placeholder="Stage size, PA and sound, parking, meals, payment method"></textarea>
+        </div>
+        <div class="f-full">
+          <button class="btn btn-gold btn-wide" type="submit">Confirm Booking</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SUGGESTION MODAL ============ -->
+<div class="modal-bg" id="sugBg">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sugTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="sugTitle">That Date Was Declined</h3>
+        <p class="card-loc" id="sugSub"></p>
+      </div>
+      <button class="x" id="sugClose" type="button" aria-label="Close">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <div id="sugCard"></div>
+      <div class="frm" style="margin-top:14px;">
+        <div class="f-full"><button class="btn btn-gold btn-wide" id="sugBook" type="button">View and Book Them Instead</button></div>
+        <div class="f-full"><button class="btn btn-line btn-wide" id="sugNo" type="button">Not Now</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<footer class="ftr">
+  <img src="./assets/book-mark.jpg" alt="">
+  <p class="m">Find. Book. Play.</p>
+  <p class="s">The Book — live entertainment, booked simply. Built by Webby AI.</p>
+  <button class="reset-link" id="resetBtn" type="button">Reset demo data on this device</button>
+</footer>
+
+<script src="./js/app.js"></script>
+</body>
+</html>
