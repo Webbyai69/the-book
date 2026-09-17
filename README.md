@@ -42,14 +42,15 @@ Once this repository is on GitHub: Settings, then Pages, then under Build and de
 
 ```
 index.html      app shell and all markup (views, modals, drawer)
-css/styles.css  design system: deep green and gold identity, all components
-js/app.js       app engine: state, persistence, rendering, booking lifecycle
-assets/         the harp roundel logo
+styles.css      design system: deep green and gold identity, all components
+app.js          app engine: state, persistence, rendering, booking lifecycle
+book-logo.jpg   harp roundel, used on the home hero
+book-mark.jpg   harp roundel, used in the header and footer
 ```
 
 ## Connecting a real backend
 
-The prototype keeps every read and write behind one `state` object in `js/app.js`, persisted through `load()` and `save()`. Every mutation point that a server should own is marked with an `API:` comment (create booking, update status, send message, create profile, create gig call, submit review). Replacing localStorage with API calls at those points converts this UI into the real product without redesigning screens. A production build additionally needs accounts and authentication, a database, push notifications, and media uploads for artist photos and videos.
+The prototype keeps every read and write behind one `state` object in `app.js`, persisted through `load()` and `save()`. Every mutation point that a server should own is marked with an `API:` comment (create booking, update status, send message, create profile, create gig call, submit review). Replacing localStorage with API calls at those points converts this UI into the real product without redesigning screens. A production build additionally needs accounts and authentication, a database, push notifications, and media uploads for artist photos and videos.
 
 ## Roadmap ideas
 

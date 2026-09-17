@@ -8,14 +8,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./css/styles.css">
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
 <header class="hdr">
   <div class="shell hdr-row">
     <div class="brand">
-      <img class="brand-mark" src="./assets/book-mark.jpg" alt="The Book harp roundel">
+      <img class="brand-mark" src="./book-mark.jpg" alt="The Book harp roundel">
       <span>
         <span class="brand-name">the book</span>
         <span class="brand-motto">Find · Book · Play</span>
@@ -51,7 +51,7 @@
   <section class="view on" id="view-home">
     <div class="hero">
       <div class="shell hero-in">
-        <img class="hero-crest" src="./assets/book-logo.jpg" alt="The Book — gold Celtic harp roundel">
+        <img class="hero-crest" src="./book-logo.jpg" alt="The Book — gold Celtic harp roundel">
         <div class="hero-copy">
           <span class="motto">Find · Book · Play</span>
           <h1>Live entertainment, booked simply</h1>
@@ -74,18 +74,12 @@
   </section>
 
   <!-- ============ DISCOVER ============ -->
-  <section class="view on" id="view-discover">
-    <div class="hero">
-      <div class="shell hero-in">
-        <img class="hero-crest" src="./assets/crest.jpg" alt="Lyons Den Promotions crest — harp, winged maiden and green lion under the motto Eirinn go Brach">
-        <div class="hero-copy">
-          <span class="motto">Éirinn go Brách</span>
-          <h1 id="heroTitle">Ireland's Stage for Traditional Music</h1>
-          <p class="lede" id="heroLede">Browse local bands, musicians and DJs, check their availability and book them for your venue — sessions, céilí nights, concerts and late sets.</p>
-        </div>
+  <section class="view" id="view-discover">
+    <div class="shell" style="padding-top:26px;">
+      <div class="sec-head" style="justify-content:flex-start;">
+        <h2 id="heroTitle">Find your next act</h2>
       </div>
-    </div>
-    <div class="shell">
+      <p class="lede" id="heroLede" style="color:var(--muted);max-width:640px;margin-bottom:20px;">Search by date, county, act type and genre.</p>
       <form class="search" id="searchForm">
         <div class="fld">
           <label for="fCounty">Where</label>
@@ -415,12 +409,12 @@
 <div class="toast" id="toast"></div>
 
 <footer class="ftr">
-  <img src="./assets/book-mark.jpg" alt="">
+  <img src="./book-mark.jpg" alt="">
   <p class="m">Find. Book. Play.</p>
   <p class="s">The Book — live entertainment, booked simply. Built by Webby AI.</p>
   <button class="reset-link" id="resetBtn" type="button">Reset demo data on this device</button>
 </footer>
 
-<script src="./js/app.js"></script>
+<script src="./app.js"></script>
 </body>
 </html>
