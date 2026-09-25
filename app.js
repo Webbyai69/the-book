@@ -247,10 +247,6 @@
           { platform: "facebook", url: "https://www.facebook.com/themidnightsonsband" },
           { platform: "instagram", url: "https://www.instagram.com/themidnightsons" },
           { platform: "website", url: "https://themidnightsons.ie" }
-        ],
-        media: [
-          { kind: "link", platform: "youtube", source: "https://www.youtube.com/watch?v=Rk7VmQ3pL2s", title: "Live at The Harbour Bar — full set opener" },
-          { kind: "link", platform: "youtube", source: "https://www.youtube.com/watch?v=Nb4xT8yUw1c", title: "Wedding reception, second set" }
         ] },
       { id: 2, name: "The Riverside Boys", type: "Band", county: "Meath", genres: ["Rock", "Country"], icon: "guitar", feeMin: 450, feeMax: 700, rating: 4.8, gigs: 52, exp: "10 years", busy: [], bio: "High-energy covers band mixing country rock with singalong classics. Regulars on the pub and wedding circuit." },
       { id: 3, name: "Electric Avenue", type: "Band", county: "Dublin", genres: ["Pop", "Electronic"], icon: "band", feeMin: 600, feeMax: 900, rating: 4.7, gigs: 44, exp: "6 years", busy: [rel(9)], bio: "Pop and electronic party band with full light show. Built for big rooms, clubs and corporate events." },
@@ -258,9 +254,6 @@
         links: [
           { platform: "youtube", url: "https://www.youtube.com/watch?v=Zq9dK5mHv7t" },
           { platform: "facebook", url: "https://www.facebook.com/thesessionsclare" }
-        ],
-        media: [
-          { kind: "link", platform: "youtube", source: "https://www.youtube.com/watch?v=Zq9dK5mHv7t", title: "Reels set, Ennis" }
         ] },
       { id: 5, name: "The Plámásers", type: "Band", county: "Cork", genres: ["Folk", "Trad"], icon: "band", feeMin: null, feeMax: null, rating: null, gigs: null, exp: "One of the first acts on the roster", busy: [rel(9)], bio: "Trad and ballad group from Cork and one of the first acts on the roster. Full profile, set list and rates to be added from the band. Find them on Facebook at theplamasersmusic.",
         links: [
@@ -271,10 +264,6 @@
           { platform: "youtube", url: "https://www.youtube.com/watch?v=Wm2pT6bXq4h" },
           { platform: "spotify", url: "https://open.spotify.com/artist/3n7XQ1kZpR8vYbLmT2sWdC" },
           { platform: "instagram", url: "https://www.instagram.com/caradelaneymusic" }
-        ],
-        media: [
-          { kind: "link", platform: "youtube", source: "https://www.youtube.com/watch?v=Wm2pT6bXq4h", title: "Loop pedal set, live" },
-          { kind: "link", platform: "spotify", source: "https://open.spotify.com/track/4mQ2vC8nJ1yRtXpZ6bLsDe", title: "Originals — studio single" }
         ] },
       { id: 7, name: "Jack and Rosie", type: "Duo or trio", county: "Cork", genres: ["Pop", "Country"], icon: "guitar", feeMin: 350, feeMax: 500, rating: 4.8, gigs: 48, exp: "9 years", busy: [rel(4)], bio: "Acoustic duo covering pop, country and requests. Two sets, easy load-in, own PA." },
       { id: 8, name: "DJ Member", type: "DJ", county: "Dublin", genres: ["Electronic", "Pop"], icon: "dj", feeMin: 300, feeMax: 500, rating: 4.6, gigs: 57, exp: "11 years", busy: [rel(2)], bio: "Club and late-bar DJ — chart, house and throwback sets. Reads the room and keeps the floor moving until close." },
