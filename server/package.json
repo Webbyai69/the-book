@@ -1,0 +1,15 @@
+{
+  "name": "the-book-server",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file=.env src/app.js",
+    "test": "node --env-file=.env --test tests/*.test.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}
