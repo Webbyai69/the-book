@@ -2,3 +2,9 @@
 Thumbs.db
 node_modules/
 *.log
+
+# server (the-book-server tarball)
+server/node_modules/
+server/.env
+server/.env.*
+!server/.env.example
