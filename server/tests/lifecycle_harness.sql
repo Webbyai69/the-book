@@ -145,7 +145,7 @@ BEGIN
 
   UPDATE book.bookings SET status='confirmed',version=version+1,confirmed_at=now() WHERE id=b;
   SELECT count(*) INTO n FROM book.availability_reservations
-    WHERE artist_profile_id=a.profile_id AND event_date=d;
+    WHERE artist_profile_id=a.profile_id AND session_date=d;
   IF n<>1 THEN RAISE NOTICE 'L5 FAIL: no reservation after confirm'; RETURN; END IF;
 
   -- artist cancels: the refund-eligible case
@@ -153,7 +153,7 @@ BEGIN
     version=version+1 WHERE id=b;
   SELECT status INTO st FROM book.bookings WHERE id=b;
   SELECT count(*) INTO n FROM book.availability_reservations
-    WHERE artist_profile_id=a.profile_id AND event_date=d;
+    WHERE artist_profile_id=a.profile_id AND session_date=d;
   IF st='cancelled_by_artist' AND n=0 THEN
     RAISE NOTICE 'L5 PASS: cancelled_by_artist recorded, reservation released';
   ELSE RAISE NOTICE 'L5 FAIL: status=% reservations=%', st, n; END IF;

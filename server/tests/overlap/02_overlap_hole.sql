@@ -17,6 +17,11 @@ BEGIN
       'Refusing to run on %. This script drops indexes and constraints. Use thebook_scratch.',
       current_database();
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'bookings_confirmed_artist_date') THEN
+    RAISE EXCEPTION
+      'This script documents the ORIGINAL single-item 002 and cannot run against the completed migration.'
+      USING HINT = 'See tests/session_date_harness.sql, and README.md in this directory.';
+  END IF;
 END $guard$;
 \set ON_ERROR_STOP off
 

@@ -1,5 +1,18 @@
 # Session-date overlap reproduction
 
+> **Superseded.** These scripts document the behaviour of the *original*
+> `002_session_date.sql`, which covered only the `session_date` column and
+> index. That file has since been rewritten in place as the complete
+> migration, so these scripts can no longer run — `02` drops an index the
+> current migration already removes, and the 05:00–07:00 bookings they rely on
+> are now rejected at confirmation. Each script aborts with an explanation if
+> run against the current schema.
+>
+> They are kept because they are the evidence for *why* the migration is
+> shaped the way it is. The original 002 is at commit `573dc10` if you want to
+> run them. For tests of the current migration, see
+> `server/tests/session_date_harness.sql`.
+
 Evidence for Phase 5 of the Windows runbook. These scripts demonstrate what
 `002_session_date.sql` fixes, what it leaves open, and why the complete
 migration needs all four Phase 5 items rather than item 1 alone.

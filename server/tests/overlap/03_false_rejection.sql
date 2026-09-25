@@ -20,7 +20,8 @@ BEGIN
     SELECT 1 FROM pg_class WHERE relname = 'bookings_confirmed_artist_date'
   ) THEN
     RAISE EXCEPTION
-      'bookings_confirmed_artist_date is missing - this database has had 02 applied. Rebuild it.';
+      'bookings_confirmed_artist_date is missing: either 02 has run here, or this database has the completed 002.'
+      USING HINT = 'Rebuild with the original 002 (commit 573dc10), or see tests/session_date_harness.sql.';
   END IF;
 END $guard$;
 \set ON_ERROR_STOP off

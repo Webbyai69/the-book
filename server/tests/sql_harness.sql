@@ -65,7 +65,7 @@ BEGIN
   SELECT * INTO v FROM pg_temp.mkparty('venue','T2 venue');
   SELECT * INTO a FROM pg_temp.mkparty('artist','T2 artist');
   b := pg_temp.mkbooking(v.user_id,v.profile_id,a.profile_id,d);
-  INSERT INTO book.availability_reservations(artist_profile_id,event_date,kind)
+  INSERT INTO book.availability_reservations(artist_profile_id,session_date,kind)
   VALUES (a.profile_id,d,'manual');
   BEGIN
     UPDATE book.bookings SET status='confirmed',version=version+1,confirmed_at=now() WHERE id=b;
@@ -198,11 +198,11 @@ BEGIN
   b := pg_temp.mkbooking(v.user_id,v.profile_id,a.profile_id,d);
   UPDATE book.bookings SET status='confirmed',version=version+1,confirmed_at=now() WHERE id=b;
   SELECT count(*) INTO n FROM book.availability_reservations
-    WHERE artist_profile_id=a.profile_id AND event_date=d;
+    WHERE artist_profile_id=a.profile_id AND session_date=d;
   IF n <> 1 THEN RAISE NOTICE 'T9 FAIL: reservation not created (n=%)', n; RETURN; END IF;
   UPDATE book.bookings SET status='cancelled_by_venue',version=version+1 WHERE id=b;
   SELECT count(*) INTO n FROM book.availability_reservations
-    WHERE artist_profile_id=a.profile_id AND event_date=d;
+    WHERE artist_profile_id=a.profile_id AND session_date=d;
   IF n = 0 THEN RAISE NOTICE 'T9 PASS: reservation released on cancellation';
   ELSE RAISE NOTICE 'T9 FAIL: reservation still held after cancellation (n=%)', n; END IF;
 END $$;

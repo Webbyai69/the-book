@@ -200,7 +200,7 @@ test("two simultaneous confirmations cannot double-book an artist", async () => 
   const reservations = await pool.query(
     `SELECT *
      FROM book.availability_reservations
-     WHERE artist_profile_id = $1 AND event_date = $2`,
+     WHERE artist_profile_id = $1 AND session_date = $2`,
     [artist.profileId, eventDate]
   );
 
@@ -214,7 +214,7 @@ test("manual availability blocks prevent confirmation", async () => {
 
   await pool.query(
     `INSERT INTO book.availability_reservations (
-       artist_profile_id, event_date, kind
+       artist_profile_id, session_date, kind
      )
      VALUES ($1, $2, 'manual')`,
     [artist.profileId, eventDate]
