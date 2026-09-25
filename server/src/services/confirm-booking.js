@@ -1,57 +1,7 @@
 import { createHash } from "node:crypto";
+import { HttpError, conflict, translateDatabaseError } from "../db/errors.js";
 
-export class HttpError extends Error {
-  constructor(statusCode, code, message) {
-    super(message);
-    this.statusCode = statusCode;
-    this.code = code;
-  }
-}
-
-function conflict(code, message) {
-  return new HttpError(409, code, message);
-}
-
-function translateDatabaseError(error) {
-  if (error instanceof HttpError) return error;
-
-  if (error.code === "23505") {
-    if (
-      error.constraint === "availability_reservations_pkey" ||
-      error.constraint === "bookings_confirmed_artist_date"
-    ) {
-      return conflict(
-        "ARTIST_UNAVAILABLE",
-        "The artist is no longer available on this date."
-      );
-    }
-
-    if (error.constraint === "bookings_confirmed_gig_call") {
-      return conflict(
-        "GIG_CALL_FILLED",
-        "Another booking has already filled this gig call."
-      );
-    }
-
-    return conflict("CONFLICT", "This action conflicts with an existing record.");
-  }
-
-  if (error.code === "23514") {
-    return conflict(
-      "INVALID_BOOKING_STATE",
-      "The booking does not satisfy the required confirmation rules."
-    );
-  }
-
-  if (error.code === "40P01" || error.code === "40001") {
-    return conflict(
-      "RETRY_REQUIRED",
-      "The booking changed concurrently. Retry using the same idempotency key."
-    );
-  }
-
-  return error;
-}
+export { HttpError };
 
 async function appendEvent(client, booking, actor, type, reason = null) {
   const payload = {
