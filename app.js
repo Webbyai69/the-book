@@ -19,6 +19,208 @@
   var GENRES = ["Rock", "Pop", "Country", "Jazz", "Indie", "Electronic", "Folk", "Trad"];
   var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+  /* ================================================================
+     Social links and clips.
+
+     Rule: a pasted string never reaches an iframe src. Every URL is
+     parsed, its host checked against a whitelist, its id extracted, and
+     the embed URL rebuilt from our own template. Anything that does not
+     match is rejected rather than rendered.
+     ================================================================ */
+
+  var MAX_LINKS = 6;
+  var MAX_MEDIA = 4;
+
+  var PLATFORM_ICONS = {
+    facebook: '<svg viewBox="0 0 24 24"><path d="M15 3h-2.5A3.5 3.5 0 0 0 9 6.5V9H7v3h2v9h3v-9h2.5l.5-3H12V6.8c0-.5.3-.8.8-.8H15z"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1"/></svg>',
+    youtube: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="M10 9.2l5 2.8-5 2.8z"/></svg>',
+    spotify: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M7.5 9.6c3-.8 6.2-.5 8.8 1M8.2 12.6c2.4-.6 5-.4 7.1.8M9 15.4c1.8-.4 3.7-.3 5.3.6"/></svg>',
+    tiktok: '<svg viewBox="0 0 24 24"><path d="M14 4v9.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 4c.4 2.2 2 3.7 4.2 3.9"/></svg>',
+    bandcamp: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M8 15l4-6 4 6z"/></svg>',
+    soundcloud: '<svg viewBox="0 0 24 24"><path d="M4 16v-4M7 17V9M10 17V7.5M13 17V9"/><path d="M16 17h3.2a2.8 2.8 0 0 0 0-5.6c-.2 0-.4 0-.6.1A4.2 4.2 0 0 0 16 8.6V17z"/></svg>',
+    website: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg>'
+  };
+
+  /* Paths are rebuilt, not passed through: only these characters survive. */
+  var SAFE_PATH = /^[A-Za-z0-9\/@._-]*$/;
+
+  function pathOk(p) { return SAFE_PATH.test(p) && p.indexOf("..") === -1; }
+
+  function idOk(re, v) { return typeof v === "string" && re.test(v); }
+
+  var SOCIAL = {
+    youtube: {
+      label: "YouTube", hostHint: "youtube.com or youtu.be", canEmbed: true, isMedia: true,
+      hostOk: function (h) { return ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].indexOf(h) !== -1; },
+      extract: function (u, h) {
+        var id = null;
+        var parts = u.pathname.split("/").filter(Boolean);
+        if (h === "youtu.be") id = parts[0];
+        else if (parts[0] === "watch") id = u.searchParams.get("v");
+        else if (parts[0] === "shorts" || parts[0] === "embed" || parts[0] === "live") id = parts[1];
+        if (!idOk(/^[A-Za-z0-9_-]{11}$/, id)) return { ok: false, error: "That does not contain a YouTube video id." };
+        return {
+          ok: true,
+          url: "https://www.youtube.com/watch?v=" + id,
+          embed: "https://www.youtube-nocookie.com/embed/" + id
+        };
+      }
+    },
+    spotify: {
+      label: "Spotify", hostHint: "open.spotify.com", canEmbed: true, isMedia: true,
+      hostOk: function (h) { return h === "open.spotify.com"; },
+      extract: function (u) {
+        var parts = u.pathname.split("/").filter(Boolean);
+        /* Spotify prefixes shared links with a locale: /intl-de/track/... */
+        if (parts[0] && (parts[0].length === 2 || /^intl-[a-z]{2}$/i.test(parts[0]))) parts.shift();
+        var kinds = ["track", "album", "artist", "playlist", "episode", "show"];
+        var kind = parts[0], id = parts[1];
+        if (kinds.indexOf(kind) === -1) return { ok: false, error: "Use a Spotify track, album, artist or playlist link." };
+        if (!idOk(/^[A-Za-z0-9]{22}$/, id)) return { ok: false, error: "That Spotify link has no id in it." };
+        return {
+          ok: true,
+          url: "https://open.spotify.com/" + kind + "/" + id,
+          embed: "https://open.spotify.com/embed/" + kind + "/" + id
+        };
+      }
+    },
+    soundcloud: {
+      label: "SoundCloud", hostHint: "soundcloud.com", canEmbed: true, isMedia: true,
+      hostOk: function (h) { return h === "soundcloud.com" || h === "www.soundcloud.com"; },
+      extract: function (u) {
+        var parts = u.pathname.split("/").filter(Boolean);
+        if (!parts.length || parts.length > 3) return { ok: false, error: "Use a SoundCloud profile or track link." };
+        for (var i = 0; i < parts.length; i++) {
+          if (!idOk(/^[A-Za-z0-9_-]{1,80}$/, parts[i])) return { ok: false, error: "That SoundCloud link has unexpected characters." };
+        }
+        var canonical = "https://soundcloud.com/" + parts.join("/");
+        /* A bare profile has nothing to play, so it embeds only as a track or set. */
+        var embed = parts.length >= 2
+          ? "https://w.soundcloud.com/player/?url=" + encodeURIComponent(canonical) + "&visual=false&show_comments=false"
+          : null;
+        return { ok: true, url: canonical, embed: embed };
+      }
+    },
+    bandcamp: {
+      /* Link only. A Bandcamp embed needs the numeric album/track id, which is
+         not present in a public page URL -- it only appears in the page's own
+         markup. Rebuilding an embed URL from the parts we have is not possible,
+         and interpolating the pasted string is exactly what we do not do. */
+      label: "Bandcamp", hostHint: "a bandcamp.com address", canEmbed: false, isMedia: false,
+      hostOk: function (h) { return h === "bandcamp.com" || /\.bandcamp\.com$/.test(h); },
+      extract: function (u, h) {
+        if (!pathOk(u.pathname)) return { ok: false, error: "That Bandcamp link has unexpected characters." };
+        return { ok: true, url: "https://" + h + u.pathname.replace(/\/$/, ""), embed: null };
+      }
+    },
+    facebook: {
+      /* Buttons, not embeds: the Facebook SDK carries tracking. */
+      label: "Facebook", hostHint: "facebook.com", canEmbed: false, isMedia: false,
+      hostOk: function (h) { return ["facebook.com", "www.facebook.com", "fb.com", "www.fb.com"].indexOf(h) !== -1; },
+      extract: function (u) {
+        if (!pathOk(u.pathname) || u.pathname === "/") return { ok: false, error: "Link to your Facebook page, not just facebook.com." };
+        return { ok: true, url: "https://www.facebook.com" + u.pathname.replace(/\/$/, ""), embed: null };
+      }
+    },
+    instagram: {
+      label: "Instagram", hostHint: "instagram.com", canEmbed: false, isMedia: false,
+      hostOk: function (h) { return ["instagram.com", "www.instagram.com"].indexOf(h) !== -1; },
+      extract: function (u) {
+        if (!pathOk(u.pathname) || u.pathname === "/") return { ok: false, error: "Link to your Instagram profile or a post." };
+        return { ok: true, url: "https://www.instagram.com" + u.pathname.replace(/\/$/, ""), embed: null };
+      }
+    },
+    tiktok: {
+      label: "TikTok", hostHint: "tiktok.com", canEmbed: false, isMedia: false,
+      hostOk: function (h) { return ["tiktok.com", "www.tiktok.com"].indexOf(h) !== -1; },
+      extract: function (u) {
+        if (!pathOk(u.pathname) || u.pathname === "/") return { ok: false, error: "Link to your TikTok profile or a video." };
+        return { ok: true, url: "https://www.tiktok.com" + u.pathname.replace(/\/$/, ""), embed: null };
+      }
+    },
+    website: {
+      label: "Website", hostHint: "any https address", canEmbed: false, isMedia: false,
+      hostOk: function (h) { return h.indexOf(".") > 0 && !/\s/.test(h); },
+      extract: function (u, h) {
+        if (!pathOk(u.pathname)) return { ok: false, error: "That address has unexpected characters in its path." };
+        return { ok: true, url: "https://" + h + u.pathname.replace(/\/$/, ""), embed: null };
+      }
+    }
+  };
+
+  var VENUE_PLATFORMS = ["facebook", "instagram", "website"];
+  function platformsFor(role) { return role === "venue" ? VENUE_PLATFORMS : Object.keys(SOCIAL); }
+
+  /* Returns { ok:true, platform, url, embed } or { ok:false, error }. */
+  function parseSocial(platform, raw) {
+    var cfg = SOCIAL[platform];
+    if (!cfg) return { ok: false, error: "Pick a platform first." };
+
+    var s = String(raw == null ? "" : raw).trim();
+    if (!s) return { ok: false, error: "Paste a link first." };
+    if (s.length > 500) return { ok: false, error: "That link is too long." };
+
+    /* Rejected before any parsing, so a crafted scheme never gets a second look. */
+    if (/^[a-z0-9.+-]*\s*:/i.test(s) && !/^https?:\/\//i.test(s)) {
+      return { ok: false, error: "Only https links are accepted." };
+    }
+    if (!/^https?:\/\//i.test(s)) {
+      if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|\?|$)/i.test(s)) s = "https://" + s;
+      else return { ok: false, error: "Use a full https:// link." };
+    }
+
+    var u;
+    try { u = new URL(s); } catch (e) { return { ok: false, error: "That is not a valid link." }; }
+    if (u.protocol !== "https:" && u.protocol !== "http:") return { ok: false, error: "Only https links are accepted." };
+
+    var host = u.hostname.toLowerCase();
+    if (!cfg.hostOk(host)) return { ok: false, error: cfg.label + " links must be on " + cfg.hostHint + "." };
+
+    var out = cfg.extract(u, host);
+    if (!out.ok) return out;
+    if (out.url.length < 8 || out.url.length > 500) return { ok: false, error: "That link is not a usable length." };
+    out.platform = platform;
+    return out;
+  }
+
+  function linksOf(o) { return (o && o.links) || []; }
+  function mediaOf(o) { return (o && o.media) || []; }
+
+  /* A row of platform buttons. Every one opens in a new tab; none embeds. */
+  function linksRowHtml(links) {
+    if (!links || !links.length) return "";
+    return '<div class="links-row">' + links.map(function (l) {
+      var cfg = SOCIAL[l.platform];
+      if (!cfg) return "";
+      return '<a class="link-chip" href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer"'
+        + ' title="' + esc(cfg.label) + '" aria-label="' + esc(cfg.label) + '">'
+        + (PLATFORM_ICONS[l.platform] || "") + "<span>" + esc(cfg.label) + "</span></a>";
+    }).join("") + "</div>";
+  }
+
+  /* Embeds are built from our own templates. Anything without a rebuilt embed
+     URL falls back to a button. */
+  function mediaHtml(media) {
+    if (!media || !media.length) return "";
+    return '<div class="clips">' + media.slice(0, MAX_MEDIA).map(function (m, i) {
+      var parsed = parseSocial(m.platform, m.source);
+      if (!parsed.ok) return "";
+      var title = m.title ? '<p class="clip-title">' + esc(m.title) + "</p>" : "";
+      if (!parsed.embed) {
+        return '<div class="clip">' + title
+          + '<a class="btn btn-line" href="' + esc(parsed.url) + '" target="_blank" rel="noopener noreferrer">Open on '
+          + esc(SOCIAL[m.platform].label) + "</a></div>";
+      }
+      return '<div class="clip clip-' + esc(m.platform) + (i === 0 ? " clip-first" : "") + '">' + title
+        + '<iframe src="' + esc(parsed.embed) + '"'
+        + ' title="' + esc(m.title || SOCIAL[m.platform].label + " clip") + '"'
+        + ' loading="lazy" allowfullscreen'
+        + ' referrerpolicy="no-referrer"'
+        + ' sandbox="allow-scripts allow-same-origin allow-presentation"></iframe></div>';
+    }).join("") + "</div>";
+  }
+
   var $ = function (id) { return document.getElementById(id); };
   function clampInt(v, fb) { var n = parseInt(v, 10); return isNaN(n) ? fb : n; }
   function esc(x) { return String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
@@ -39,12 +241,41 @@
   /* ---------- seed data (fictional, from the product concept; Plamasers and Hannah's are real onboarded names) ---------- */
   function seedState() {
     var artists = [
-      { id: 1, name: "The Midnight Sons", type: "Band", county: "Meath", genres: ["Rock", "Pop", "Indie"], icon: "band", feeMin: 500, feeMax: 800, rating: 4.9, gigs: 37, exp: "8 years, 300+ gigs", busy: [rel(7), rel(14)], bio: "Four-piece live band specialising in classic rock, modern pop and indie favourites. Available for pubs, bars, weddings and private events. PA carried, soundcheck required." },
+      { id: 1, name: "The Midnight Sons", type: "Band", county: "Meath", genres: ["Rock", "Pop", "Indie"], icon: "band", feeMin: 500, feeMax: 800, rating: 4.9, gigs: 37, exp: "8 years, 300+ gigs", busy: [rel(7), rel(14)], bio: "Four-piece live band specialising in classic rock, modern pop and indie favourites. Available for pubs, bars, weddings and private events. PA carried, soundcheck required.",
+        links: [
+          { platform: "youtube", url: "https://www.youtube.com/watch?v=Rk7VmQ3pL2s" },
+          { platform: "facebook", url: "https://www.facebook.com/themidnightsonsband" },
+          { platform: "instagram", url: "https://www.instagram.com/themidnightsons" },
+          { platform: "website", url: "https://themidnightsons.ie" }
+        ],
+        media: [
+          { kind: "link", platform: "youtube", source: "https://www.youtube.com/watch?v=Rk7VmQ3pL2s", title: "Live at The Harbour Bar — full set opener" },
+          { kind: "link", platform: "youtube", source: "https://www.youtube.com/watch?v=Nb4xT8yUw1c", title: "Wedding reception, second set" }
+        ] },
       { id: 2, name: "The Riverside Boys", type: "Band", county: "Meath", genres: ["Rock", "Country"], icon: "guitar", feeMin: 450, feeMax: 700, rating: 4.8, gigs: 52, exp: "10 years", busy: [], bio: "High-energy covers band mixing country rock with singalong classics. Regulars on the pub and wedding circuit." },
       { id: 3, name: "Electric Avenue", type: "Band", county: "Dublin", genres: ["Pop", "Electronic"], icon: "band", feeMin: 600, feeMax: 900, rating: 4.7, gigs: 44, exp: "6 years", busy: [rel(9)], bio: "Pop and electronic party band with full light show. Built for big rooms, clubs and corporate events." },
-      { id: 4, name: "The Sessions", type: "Duo or trio", county: "Clare", genres: ["Folk", "Trad"], icon: "fiddle", feeMin: 300, feeMax: 450, rating: 4.9, gigs: 61, exp: "12 years", busy: [rel(21)], bio: "Fiddle, guitar and vocals — folk and trad sets that build from slow airs to flat-out reels. Perfect for pubs and intimate rooms." },
-      { id: 5, name: "The Plámásers", type: "Band", county: "Cork", genres: ["Folk", "Trad"], icon: "band", feeMin: null, feeMax: null, rating: null, gigs: null, exp: "One of the first acts on the roster", busy: [rel(9)], bio: "Trad and ballad group from Cork and one of the first acts on the roster. Full profile, set list and rates to be added from the band. Find them on Facebook at theplamasersmusic." },
-      { id: 6, name: "Cara Delaney", type: "Solo", county: "Galway", genres: ["Folk", "Indie"], icon: "voice", feeMin: 250, feeMax: 400, rating: 5.0, gigs: 33, exp: "7 years", busy: [], bio: "Solo singer-songwriter with loop pedal — acoustic folk and indie covers plus originals. Quiet rooms and dinner service a speciality." },
+      { id: 4, name: "The Sessions", type: "Duo or trio", county: "Clare", genres: ["Folk", "Trad"], icon: "fiddle", feeMin: 300, feeMax: 450, rating: 4.9, gigs: 61, exp: "12 years", busy: [rel(21)], bio: "Fiddle, guitar and vocals — folk and trad sets that build from slow airs to flat-out reels. Perfect for pubs and intimate rooms.",
+        links: [
+          { platform: "youtube", url: "https://www.youtube.com/watch?v=Zq9dK5mHv7t" },
+          { platform: "facebook", url: "https://www.facebook.com/thesessionsclare" }
+        ],
+        media: [
+          { kind: "link", platform: "youtube", source: "https://www.youtube.com/watch?v=Zq9dK5mHv7t", title: "Reels set, Ennis" }
+        ] },
+      { id: 5, name: "The Plámásers", type: "Band", county: "Cork", genres: ["Folk", "Trad"], icon: "band", feeMin: null, feeMax: null, rating: null, gigs: null, exp: "One of the first acts on the roster", busy: [rel(9)], bio: "Trad and ballad group from Cork and one of the first acts on the roster. Full profile, set list and rates to be added from the band. Find them on Facebook at theplamasersmusic.",
+        links: [
+          { platform: "facebook", url: "https://www.facebook.com/theplamasersmusic" }
+        ] },
+      { id: 6, name: "Cara Delaney", type: "Solo", county: "Galway", genres: ["Folk", "Indie"], icon: "voice", feeMin: 250, feeMax: 400, rating: 5.0, gigs: 33, exp: "7 years", busy: [], bio: "Solo singer-songwriter with loop pedal — acoustic folk and indie covers plus originals. Quiet rooms and dinner service a speciality.",
+        links: [
+          { platform: "youtube", url: "https://www.youtube.com/watch?v=Wm2pT6bXq4h" },
+          { platform: "spotify", url: "https://open.spotify.com/artist/3n7XQ1kZpR8vYbLmT2sWdC" },
+          { platform: "instagram", url: "https://www.instagram.com/caradelaneymusic" }
+        ],
+        media: [
+          { kind: "link", platform: "youtube", source: "https://www.youtube.com/watch?v=Wm2pT6bXq4h", title: "Loop pedal set, live" },
+          { kind: "link", platform: "spotify", source: "https://open.spotify.com/track/4mQ2vC8nJ1yRtXpZ6bLsDe", title: "Originals — studio single" }
+        ] },
       { id: 7, name: "Jack and Rosie", type: "Duo or trio", county: "Cork", genres: ["Pop", "Country"], icon: "guitar", feeMin: 350, feeMax: 500, rating: 4.8, gigs: 48, exp: "9 years", busy: [rel(4)], bio: "Acoustic duo covering pop, country and requests. Two sets, easy load-in, own PA." },
       { id: 8, name: "DJ Member", type: "DJ", county: "Dublin", genres: ["Electronic", "Pop"], icon: "dj", feeMin: 300, feeMax: 500, rating: 4.6, gigs: 57, exp: "11 years", busy: [rel(2)], bio: "Club and late-bar DJ — chart, house and throwback sets. Reads the room and keeps the floor moving until close." },
       { id: 9, name: "The Long Acre Selector", type: "DJ", county: "Dublin", genres: ["Folk", "Rock"], icon: "dj", feeMin: 220, feeMax: 350, rating: 4.7, gigs: 38, exp: "7 years", busy: [], bio: "Vinyl DJ spinning Irish ballads, folk revival and classic rock records. Ideal between live sets or for themed nights." },
@@ -77,6 +308,8 @@
       name: "",
       county: "Meath",
       bio: "",
+      links: [],
+      media: [],
       nextId: 500,
       artists: artists,
       gigcalls: gigcalls,
@@ -90,12 +323,24 @@
 
   var KEY = "thebook-v1";
   var state;
+  /* Older saved state predates links and media. Fill the fields in rather than
+     bumping ver, which would throw away the user's demo data. */
+  function normalise(st) {
+    if (!st) return st;
+    if (!Array.isArray(st.links)) st.links = [];
+    if (!Array.isArray(st.media)) st.media = [];
+    (st.artists || []).forEach(function (a) {
+      if (!Array.isArray(a.links)) a.links = [];
+      if (!Array.isArray(a.media)) a.media = [];
+    });
+    return st;
+  }
   function load() {
     try {
       var raw = localStorage.getItem(KEY);
-      if (raw) { var st = JSON.parse(raw); if (st && st.ver === 1) return st; }
+      if (raw) { var st = JSON.parse(raw); if (st && st.ver === 1) return normalise(st); }
     } catch (e) {}
-    return seedState();
+    return normalise(seedState());
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
   state = load();
@@ -309,8 +554,14 @@
     var rateHtml = a.rating
       ? '<span class="rate">' + starSvg + a.rating.toFixed(1) + ' <span class="n">(' + a.gigs + ")</span></span>"
       : '<span class="rate"><span class="n">New on the roster</span></span>';
+    /* The whole point is that a publican can hear the act before opening
+       anything, so the card says so up front. */
+    var hasClips = mediaOf(a).length > 0;
+    var listen = hasClips
+      ? '<button class="listen" type="button" aria-label="Listen to ' + esc(a.name) + '">&#9654; Listen</button>'
+      : "";
     el.innerHTML =
-      '<div class="card-art">' + ICONS[a.icon] + "</div>" +
+      '<div class="card-art">' + ICONS[a.icon] + listen + "</div>" +
       '<div class="card-body">' +
         '<div class="card-top"><div><p class="card-name">' + esc(a.name) + '</p><p class="card-loc">' + esc(a.type) + " &middot; Co. " + esc(a.county) + (a.exp ? " &middot; " + esc(a.exp) : "") + "</p></div>" +
         rateHtml + "</div>" +
@@ -319,6 +570,7 @@
         '<button class="btn btn-gold" type="button">View</button></div>' +
       "</div>";
     el.querySelector(".btn").addEventListener("click", function () { openModal(a); });
+    if (hasClips) el.querySelector(".listen").addEventListener("click", function () { openModal(a); });
     return el;
   }
 
@@ -372,6 +624,8 @@
       : a.type + " · Co. " + a.county + " · new on the roster";
     $("mBio").textContent = a.bio;
     $("mTags").innerHTML = a.genres.map(function (st) { return '<span class="tag">' + esc(st) + "</span>"; }).join("");
+    if ($("mLinks")) $("mLinks").innerHTML = linksRowHtml(linksOf(a));
+    if ($("mMedia")) $("mMedia").innerHTML = mediaHtml(mediaOf(a));
     $("bFee").value = a.feeMin || "";
     $("bAvail").textContent = "";
     $("modalBg").classList.add("on");
@@ -713,12 +967,125 @@
   });
 
   /* ---------- profile ---------- */
+  function mediaPlatforms() {
+    return Object.keys(SOCIAL).filter(function (p) { return SOCIAL[p].isMedia; });
+  }
+  function fillPlatformSelect(sel, list) {
+    if (!sel) return;
+    sel.innerHTML = list.map(function (p) {
+      return '<option value="' + p + '">' + esc(SOCIAL[p].label) + "</option>";
+    }).join("");
+  }
+  function setMsg(el, text, good) {
+    if (!el) return;
+    el.textContent = text || "";
+    el.className = "field-msg" + (text ? (good ? " good" : " bad") : "");
+  }
+
+  function renderLinkList() {
+    var host = $("pfLinkList");
+    if (!host) return;
+    var links = linksOf(state);
+    if (!links.length) { host.innerHTML = '<p class="field-msg">No links added yet.</p>'; return; }
+    host.innerHTML = links.map(function (l, i) {
+      var label = SOCIAL[l.platform] ? SOCIAL[l.platform].label : l.platform;
+      return '<div class="link-row">' + (PLATFORM_ICONS[l.platform] || "")
+        + '<span class="link-row-label">' + esc(label) + "</span>"
+        + '<a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' + esc(l.url) + "</a>"
+        + '<button class="x" type="button" data-i="' + i + '" aria-label="Remove ' + esc(label) + ' link">&#215;</button></div>';
+    }).join("");
+    Array.prototype.forEach.call(host.querySelectorAll("button[data-i]"), function (b) {
+      b.addEventListener("click", function () {
+        /* API: delete profile link */
+        state.links.splice(clampInt(b.getAttribute("data-i"), 0), 1);
+        save(); renderLinkList(); setMsg($("pfLinkMsg"), "");
+        toast("Link removed.");
+      });
+    });
+  }
+
+  function renderClipList() {
+    var host = $("pfClipList");
+    if (!host) return;
+    var media = mediaOf(state);
+    if (!media.length) { host.innerHTML = '<p class="field-msg">No clips added yet.</p>'; return; }
+    host.innerHTML = media.map(function (m, i) {
+      var label = SOCIAL[m.platform] ? SOCIAL[m.platform].label : m.platform;
+      return '<div class="link-row">' + (PLATFORM_ICONS[m.platform] || "")
+        + '<span class="link-row-label">' + esc(label) + "</span>"
+        + '<a href="' + esc(m.source) + '" target="_blank" rel="noopener noreferrer">' + esc(m.title || m.source) + "</a>"
+        + '<button class="x" type="button" data-i="' + i + '" aria-label="Remove clip">&#215;</button></div>';
+    }).join("");
+    Array.prototype.forEach.call(host.querySelectorAll("button[data-i]"), function (b) {
+      b.addEventListener("click", function () {
+        /* API: delete profile media */
+        state.media.splice(clampInt(b.getAttribute("data-i"), 0), 1);
+        save(); renderClipList(); setMsg($("pfClipMsg"), "");
+        toast("Clip removed.");
+      });
+    });
+  }
+
   function renderProfile() {
     $("pfName").value = state.name || "";
     $("pfCounty").value = state.county || "Meath";
     $("pfType").value = state.role === "venue" ? "Venue" : "Artist";
     $("pfBio").value = state.bio || "";
+
+    /* Venues get facebook / instagram / website only. The table does not care,
+       the form does. */
+    fillPlatformSelect($("pfPlatform"), platformsFor(state.role));
+    fillPlatformSelect($("pfClipPlatform"), mediaPlatforms());
+
+    /* Clips are artist-only in the UI. Nothing in the data stops a venue from
+       having them later. */
+    if ($("pfClipsWrap")) $("pfClipsWrap").style.display = state.role === "venue" ? "none" : "";
+
+    setMsg($("pfLinkMsg"), "");
+    setMsg($("pfClipMsg"), "");
+    renderLinkList();
+    renderClipList();
   }
+
+  if ($("pfAddLink")) $("pfAddLink").addEventListener("click", function () {
+    var msg = $("pfLinkMsg");
+    var platform = $("pfPlatform").value;
+    if (platformsFor(state.role).indexOf(platform) === -1) { setMsg(msg, "That platform is not available for this account type."); return; }
+    if (linksOf(state).length >= MAX_LINKS) { setMsg(msg, "That is the maximum of " + MAX_LINKS + " links. Remove one first."); return; }
+    if (linksOf(state).some(function (l) { return l.platform === platform; })) {
+      setMsg(msg, "You already have a " + SOCIAL[platform].label + " link. Remove it first."); return;
+    }
+    var res = parseSocial(platform, $("pfLinkUrl").value);
+    if (!res.ok) { setMsg(msg, res.error); return; }
+    /* API: create profile link */
+    state.links.push({ platform: platform, url: res.url });
+    save();
+    $("pfLinkUrl").value = "";
+    setMsg(msg, "Added " + SOCIAL[platform].label + ".", true);
+    renderLinkList();
+  });
+
+  if ($("pfAddClip")) $("pfAddClip").addEventListener("click", function () {
+    var msg = $("pfClipMsg");
+    var platform = $("pfClipPlatform").value;
+    if (mediaPlatforms().indexOf(platform) === -1) { setMsg(msg, "Clips can only come from YouTube, Spotify or SoundCloud."); return; }
+    if (mediaOf(state).length >= MAX_MEDIA) { setMsg(msg, "That is the maximum of " + MAX_MEDIA + " clips. Remove one first."); return; }
+    var res = parseSocial(platform, $("pfClipUrl").value);
+    if (!res.ok) { setMsg(msg, res.error); return; }
+    if (!res.embed) { setMsg(msg, "That link has nothing playable in it — use a link to a track or a video, not a profile."); return; }
+    /* API: create profile media */
+    state.media.push({
+      kind: "link",
+      platform: platform,
+      source: res.url,
+      title: String($("pfClipTitle").value || "").trim().slice(0, 120)
+    });
+    save();
+    $("pfClipUrl").value = "";
+    $("pfClipTitle").value = "";
+    setMsg(msg, "Clip added.", true);
+    renderClipList();
+  });
   $("profForm").addEventListener("submit", function (e) {
     e.preventDefault();
     /* API: update profile */

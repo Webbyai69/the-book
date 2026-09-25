@@ -155,6 +155,27 @@
             <label for="pfBio">About</label>
             <textarea id="pfBio" placeholder="A short description shown to the other side of a booking"></textarea>
           </div>
+          <div class="f-full social-block">
+            <label for="pfPlatform">Links <span class="hint">up to 6, one per platform</span></label>
+            <div id="pfLinkList" class="link-list"></div>
+            <div class="link-add">
+              <select id="pfPlatform" aria-label="Platform"></select>
+              <input id="pfLinkUrl" type="text" inputmode="url" autocomplete="off" placeholder="Paste the address of your page">
+              <button class="btn btn-line" id="pfAddLink" type="button">Add link</button>
+            </div>
+            <p class="field-msg" id="pfLinkMsg" role="status"></p>
+          </div>
+          <div class="f-full social-block" id="pfClipsWrap">
+            <label for="pfClipPlatform">Clips <span class="hint">up to 4, YouTube, Spotify or SoundCloud</span></label>
+            <div id="pfClipList" class="link-list"></div>
+            <div class="link-add">
+              <select id="pfClipPlatform" aria-label="Clip platform"></select>
+              <input id="pfClipUrl" type="text" inputmode="url" autocomplete="off" placeholder="Paste a link to a track or video">
+              <input id="pfClipTitle" type="text" autocomplete="off" placeholder="Title (optional)">
+              <button class="btn btn-line" id="pfAddClip" type="button">Add clip</button>
+            </div>
+            <p class="field-msg" id="pfClipMsg" role="status"></p>
+          </div>
           <div class="f-full"><button class="btn btn-gold" type="submit">Save Profile</button></div>
         </form>
         <p style="color:var(--faint);font-size:0.82rem;margin-top:16px;">Messaging in The Book stays attached to bookings — open any booking row and tap Message to talk to the other side.</p>
@@ -195,6 +216,8 @@
     <div class="modal-body">
       <p class="bio" id="mBio"></p>
       <div class="tags" id="mTags" style="margin-top:10px;"></div>
+      <div id="mLinks"></div>
+      <div id="mMedia"></div>
       <form class="frm" id="bookForm">
         <div>
           <label for="bDate">Date</label>
