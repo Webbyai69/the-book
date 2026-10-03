@@ -310,6 +310,466 @@
     };
   }
 
+
+  /* ================================================================
+     Live mode.
+
+     With config.js filled in, the same screens run against the API:
+     sign-in through Supabase, every read from /bootstrap, every change
+     through its own endpoint. Server data is mapped onto the shapes the
+     render functions already use, so the screens do not fork -- only the
+     API: points branch. With config.js empty, none of this runs and the
+     site stays the self-contained demo.
+     ================================================================ */
+  var api = window.TheBookApi;
+  var LIVE = !!(api && api.configured);
+  var CONFIG = window.THE_BOOK_CONFIG || {};
+
+  /* Pinned with its integrity hash: a changed file on the CDN is refused. */
+  var SUPABASE_JS = {
+    src: "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js",
+    integrity: "sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+  };
+
+  var live = { client: null, user: null, profiles: [], chat: null, messages: [], finMode: null };
+
+  function liveState() {
+    return {
+      ver: 1, onboarded: true, role: "venue", name: "", county: "Cork", bio: "",
+      links: [], media: [], nextId: 500, profileId: null, me: null,
+      artists: [], gigcalls: [], bookings: [], threads: [], notifs: []
+    };
+  }
+
+  var ACT_ICON = { "Band": "band", "Solo": "voice", "Duo or trio": "guitar", "DJ": "dj" };
+  function euro(minor) { return minor === null || minor === undefined ? null : Math.round(minor / 100); }
+  function cents(v) { var n = parseInt(v, 10); return isNaN(n) ? null : n * 100; }
+  function addDays(isoStr, n) {
+    var d = new Date(isoStr + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /* Gig times are Irish wall-clock times whatever the visitor's timezone. */
+  var dublinFmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Dublin", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  });
+  function dublinLocal(instant) {
+    var p = {};
+    dublinFmt.formatToParts(new Date(instant)).forEach(function (x) { p[x.type] = x.value; });
+    return { date: p.year + "-" + p.month + "-" + p.day, time: p.hour + ":" + p.minute };
+  }
+  function dublinInstant(dateStr, hhmm) {
+    var offsets = ["+00:00", "+01:00"];
+    for (var i = 0; i < offsets.length; i++) {
+      var candidate = dateStr + "T" + hhmm + ":00" + offsets[i];
+      var l = dublinLocal(candidate);
+      if (l.date === dateStr && l.time === hhmm) return new Date(candidate).toISOString();
+    }
+    return null;
+  }
+  /* A time on a gig night: anything before 06:00 is the following morning,
+     the same rule the server uses to decide which night a booking is on. */
+  function nightInstant(night, hhmm) {
+    if (!night || !hhmm) return null;
+    return dublinInstant(hhmm < "06:00" ? addDays(night, 1) : night, hhmm);
+  }
+  function hhmm(instant) { return instant ? dublinLocal(instant).time : ""; }
+  function clock(instant) { return instant ? fmtTime(hhmm(instant)) : ""; }
+
+  function liveArtist(a) {
+    return {
+      id: a.id, name: a.name, type: a.actType || "Band", county: a.county, genres: a.genres || [],
+      icon: ACT_ICON[a.actType] || "band", feeMin: euro(a.statedFeeMinor), feeMax: euro(a.statedFeeMinor),
+      rating: a.rating, gigs: a.reviewCount, exp: "", busy: [], bio: a.bio || "Profile details to be added.",
+      links: [], media: []
+    };
+  }
+
+  /* A gig call's genre is stored at the front of its details. */
+  var LOOKING_FOR = /^Looking for: ([A-Za-z ]+)\.\s*/;
+  function liveGigCall(g) {
+    var m = LOOKING_FOR.exec(g.details || "");
+    return {
+      id: g.id, venue: g.venueName, county: g.county, dateISO: g.eventDate, slot: "Live music",
+      budget: euro(g.budgetMinor), styles: m ? [m[1]] : [],
+      bio: (m ? g.details.slice(m[0].length) : g.details) || "Details on request.",
+      applied: g.applied, mine: g.mine, status: g.status
+    };
+  }
+
+  var PILL = {
+    requested: { venue: "Request sent", artist: "New request" },
+    applied: { venue: "New application", artist: "Applied" },
+    offered: { venue: "Offer sent", artist: "Offer to review" },
+    accepted: { venue: "Accepted", artist: "Accepted" }
+  };
+
+  function liveBooking(b) {
+    var t = b.terms || {};
+    var artist = state.artists.filter(function (a) { return a.id === b.artist.id; })[0];
+    return {
+      id: b.id, artistId: b.artist.id, artistName: b.artist.name, venueName: b.venue.name,
+      dateISO: b.sessionDate || b.eventDate,
+      slot: t.startsAt ? clock(t.startsAt) + " to " + clock(t.endsAt) : "Times to be agreed",
+      fee: euro(t.feeMinor), dep: euro(t.depositMinor) || 0,
+      status: { requested: "pend", applied: "pend", offered: "pend", accepted: "acc", confirmed: "ok" }[b.status] || "bad",
+      pill: (PILL[b.status] || {})[b.side],
+      icon: artist ? artist.icon : "band",
+      rated: b.reviewedByMe,
+      server: b
+    };
+  }
+
+  var NOTE_TEXT = {
+    "booking.requested": "{other} sent you a booking request for {date}. Accept or decline under Bookings.",
+    "gig_application.created": "{other} applied for your gig call on {date}.",
+    "booking.offered": "{other} sent terms for {date}. Review them under Bookings.",
+    "booking.accepted": "{other} accepted the terms for {date}. Confirm to lock it in.",
+    "booking.confirmed": "Booking confirmed with {other} for {date}.",
+    "booking.declined": "{other} declined your request for {date}. Tap for a similar act free that night.",
+    "booking.withdrawn": "{other} withdrew the booking for {date}.",
+    "gig_application.rejected": "Your application for {date} was not taken this time.",
+    "gig_application.not_selected": "Your application for {date} was not taken this time.",
+    "booking.cancelled": "{other} cancelled the booking for {date}.",
+    "booking.message": "New message from {other} about {date}.",
+    "booking.reviewed": "{other} reviewed your gig on {date}."
+  };
+
+  function liveNotif(n) {
+    var b = state.bookings.filter(function (x) { return x.id === n.bookingId; })[0];
+    var other = b ? (state.role === "venue" ? b.artistName : b.venueName) : "The other side";
+    var text = (NOTE_TEXT[n.type] || "There is an update on your booking for {date}.")
+      .replace("{other}", other)
+      .replace("{date}", b ? fmt(b.dateISO) : "your gig");
+    var out = {
+      id: n.id, forRole: state.role, text: text, tab: "bookings", read: n.read, live: true,
+      ts: new Date(n.createdAt).toLocaleString("en-IE", { weekday: "short", hour: "2-digit", minute: "2-digit" })
+    };
+    if (n.type === "booking.declined" && b && state.role === "venue") {
+      out.suggestFor = b.artistId;
+      out.dateISO = b.dateISO;
+    }
+    return out;
+  }
+
+  function applyBootstrap(data) {
+    var p = data.profile;
+    live.profiles = data.profiles;
+    state.profileId = p.id;
+    state.me = p;
+    state.role = p.kind;
+    state.name = p.name;
+    state.county = p.county;
+    state.bio = p.bio || "";
+    state.artists = data.artists.map(liveArtist);
+    state.gigcalls = data.gigCalls.filter(function (g) { return !g.mine && g.status === "open"; }).map(liveGigCall);
+    state.bookings = data.bookings.map(liveBooking);
+    state.notifs = data.notifications.map(liveNotif);
+  }
+
+  function liveError(err) {
+    if (!err || err.code === "SUPERSEDED") return;
+    if (err.status === 401) { showAuth(); return; }
+    toast(err.message || "Something went wrong. Try again.");
+  }
+
+  function refresh() {
+    return api.bootstrap().then(function (data) {
+      applyBootstrap(data);
+      renderWho();
+      setRole(state.role);
+    }).catch(liveError);
+  }
+
+  /* Runs a change, then reloads everything from the server, so the screen
+     always shows what the server holds rather than what we hoped it did.
+     Resolves to the result, or null when it failed (already reported). */
+  function liveDo(promise, okMsg) {
+    return promise.then(function (res) {
+      return refresh().then(function () { if (okMsg) toast(okMsg); return res; });
+    }).catch(function (err) {
+      if (err && api.isStale(err.code)) refresh();
+      liveError(err);
+      return null;
+    });
+  }
+
+  /* ---------- sign-in ---------- */
+  function loadSupabase() {
+    return new Promise(function (resolve, reject) {
+      if (window.supabase && window.supabase.createClient) { resolve(window.supabase); return; }
+      var s = document.createElement("script");
+      s.src = SUPABASE_JS.src;
+      s.integrity = SUPABASE_JS.integrity;
+      s.crossOrigin = "anonymous";
+      s.onload = function () { resolve(window.supabase); };
+      s.onerror = function () { reject(new Error("Sign-in could not load. Check your connection and reload.")); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function showAuth() {
+    ["onbBg", "modalBg", "finBg", "chatBg", "revBg", "newArtBg", "newGigBg", "sugBg"].forEach(function (id) {
+      $(id).classList.remove("on");
+    });
+    $("authBg").classList.add("on");
+  }
+
+  function authWith(method) {
+    var email = $("authEmail").value.trim();
+    var password = $("authPassword").value;
+    var msg = $("authMsg");
+    setMsg(msg, method === "signUp" ? "Creating your account..." : "Signing in...", true);
+    var opts = { email: email, password: password };
+    if (method === "signUp") opts.options = { emailRedirectTo: location.origin + location.pathname };
+
+    live.client.auth[method](opts).then(function (r) {
+      if (r.error) { setMsg(msg, r.error.message); return; }
+      if (!r.data.session) {
+        setMsg(msg, "Check your email to confirm your address, then sign in here.", true);
+        return;
+      }
+      setMsg(msg, "");
+      $("authBg").classList.remove("on");
+      afterSignIn(r.data.session.user);
+    }).catch(function (e) { setMsg(msg, e.message || "Could not reach sign-in."); });
+  }
+
+  function rememberedProfile() {
+    try { return localStorage.getItem("thebook-profile:" + live.user.id); } catch (e) { return null; }
+  }
+
+  function selectProfile(p) {
+    try { localStorage.setItem("thebook-profile:" + live.user.id, p.id); } catch (e) {}
+    api.setSession({ profileId: p.id });
+    return refresh();
+  }
+
+  function afterSignIn(user) {
+    live.user = user;
+    api.me().then(function (res) {
+      live.profiles = res.profiles;
+      if (!res.profiles.length) { startOnboarding(null); return; }
+      var remembered = rememberedProfile();
+      selectProfile(res.profiles.filter(function (p) { return p.id === remembered; })[0] || res.profiles[0]);
+    }).catch(liveError);
+  }
+
+  function startOnboarding(kind) {
+    onbRole = kind || "venue";
+    document.querySelectorAll(".onb-role").forEach(function (x) { x.classList.toggle("on", x.dataset.r === onbRole); });
+    $("onbTitle").textContent = live.profiles.length ? "Add a profile" : "Welcome to The Book";
+    $("onbLede").textContent = live.profiles.length
+      ? "Create the other side of your account. Switch between them with the Venue and Artist buttons."
+      : "Tell us who you are. You can add a venue or an act later from the switch at the top.";
+    $("onbName").value = "";
+    $("onbBg").classList.add("on");
+  }
+
+  function liveSwitchRole(kind) {
+    var p = live.profiles.filter(function (x) { return x.kind === kind; })[0];
+    if (p) { if (p.id !== state.profileId) selectProfile(p); return; }
+    startOnboarding(kind);
+  }
+
+  function openArtistDetails() {
+    var me = state.me || {};
+    $("naName").value = me.name || "";
+    $("naCounty").value = me.county || "Cork";
+    $("naFee").value = euro(me.statedFeeMinor) || "";
+    $("naType").value = me.actType || "Band";
+    if (me.genres && me.genres[0]) $("naStyle").value = me.genres[0];
+    $("naBio").value = me.bio || "";
+    $("newArtBg").classList.add("on");
+  }
+
+  function liveStart() {
+    document.body.classList.add("live");
+    $("resetBtn").textContent = "Sign out";
+
+    loadSupabase().then(function (sb) {
+      live.client = sb.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+      api.setTokenProvider(function () {
+        return live.client.auth.getSession().then(function (r) {
+          return r.data.session ? r.data.session.access_token : null;
+        });
+      });
+      live.client.auth.onAuthStateChange(function (event) { if (event === "SIGNED_OUT") showAuth(); });
+      return live.client.auth.getSession();
+    }).then(function (r) {
+      if (r.data.session) afterSignIn(r.data.session.user);
+      else showAuth();
+    }).catch(function (e) {
+      toast(e.message);
+    });
+
+    /* Pick up the other side's changes without a reload. */
+    window.addEventListener("focus", function () { if (state.profileId) refresh(); });
+    setInterval(function () { if (state.profileId && !document.hidden) refresh(); }, 60000);
+  }
+
+  $("authForm").addEventListener("submit", function (e) { e.preventDefault(); authWith("signInWithPassword"); });
+  $("authSignUp").addEventListener("click", function () {
+    if (!$("authForm").reportValidity()) return;
+    authWith("signUp");
+  });
+
+  /* ---------- live booking actions ---------- */
+  function liveActionsHtml(b, group) {
+    var aa = b.server.allowedActions || [];
+    var has = function (a) { return aa.indexOf(a) !== -1; };
+    var out = "";
+    if (has("accept")) out += '<button class="btn btn-gold" data-a="acc" type="button">Accept</button>';
+    if (has("decline")) out += '<button class="btn btn-line" data-a="bad" type="button">Decline</button>';
+    if (has("offer")) out += '<button class="btn btn-gold" data-a="fin" type="button">Make Offer</button>';
+    if (has("confirm")) out += '<button class="btn btn-gold" data-a="fin" type="button">Finalize Details</button>';
+    else if (has("revise")) out += '<button class="btn btn-line" data-a="fin" type="button">Edit Offer</button>';
+    if (has("reject")) out += '<button class="btn btn-line" data-a="rej" type="button">Not This Time</button>';
+    if (has("withdraw")) out += '<button class="btn btn-line" data-a="wd" type="button">Withdraw</button>';
+    if (group === "done") {
+      out = b.rated
+        ? '<span class="rated">Reviewed</span>'
+        : (b.server.canReview ? '<button class="btn btn-gold" data-a="rate" type="button">Rate This Gig</button>' : "");
+    } else if (has("cancel")) {
+      out += '<button class="btn btn-line" data-a="can" type="button">Cancel Gig</button>';
+    }
+    return out;
+  }
+
+  function liveTransition(b, action, reason, okMsg) {
+    return liveDo(api.transitionBooking(b.server, action, reason), okMsg);
+  }
+
+  function liveRowAction(b, a) {
+    var other = state.role === "venue" ? b.artistName : b.venueName;
+    if (a === "acc") return liveDo(api.acceptBooking(b.server), "Accepted. " + other + " has been told and can now confirm.");
+    if (a === "bad") return liveTransition(b, "decline", null, "Declined. " + other + " will be offered a similar act.");
+    if (a === "rej") return liveTransition(b, "reject", null, "Application closed.");
+    if (a === "wd") return liveTransition(b, "withdraw", null, "Withdrawn.");
+    if (a === "can") {
+      var reason = window.prompt("Cancel this confirmed gig with " + other + "? They will be told. Add a reason (optional):", "");
+      if (reason === null) return;
+      return liveTransition(b, "cancel", reason, "Gig cancelled. " + other + " has been told.");
+    }
+  }
+
+  /* ---------- live finalize: offer, revise or confirm ---------- */
+  function finTerms() {
+    var night = finTarget.dateISO;
+    return {
+      startsAt: nightInstant(night, $("finStart").value),
+      endsAt: nightInstant(night, $("finEnd").value),
+      arrivalAt: nightInstant(night, $("finArr").value),
+      soundcheckAt: nightInstant(night, $("finSc").value),
+      feeMinor: cents($("finFee").value),
+      depositMinor: cents($("finDep").value) || 0,
+      details: $("finNote").value.trim()
+    };
+  }
+
+  function sameTerms(a, t) {
+    var norm = function (x) { return x ? new Date(x).toISOString() : null; };
+    return norm(a.startsAt) === norm(t.startsAt) && norm(a.endsAt) === norm(t.endsAt) &&
+      norm(a.arrivalAt) === norm(t.arrivalAt) && norm(a.soundcheckAt) === norm(t.soundcheckAt) &&
+      a.feeMinor === t.feeMinor && a.depositMinor === (t.depositMinor || 0) &&
+      a.details === (t.details || "");
+  }
+
+  function finLabel() {
+    if (!LIVE || !finTarget) return;
+    var changed = !sameTerms(finTerms(), finTarget.server.terms);
+    $("finSubmit").textContent = live.finMode === "offer" ? "Send Offer"
+      : live.finMode === "revise" ? "Update Offer"
+      : changed ? "Send Updated Terms" : "Confirm Booking";
+  }
+
+  function liveOpenFinalize(b) {
+    var t = b.server.terms || {};
+    var s = b.server.status;
+    live.finMode = s === "applied" ? "offer" : s === "accepted" ? "confirm" : "revise";
+    $("finTitle").textContent = live.finMode === "offer" ? "Make an Offer" : live.finMode === "confirm" ? "Finalize Booking" : "Edit Your Offer";
+    $("finIntro").textContent = live.finMode === "offer"
+      ? b.artistName + " applied for your gig. Set the times and price; they accept, then you confirm."
+      : live.finMode === "confirm"
+        ? b.artistName + " accepted these terms. Confirm to lock it in. Changing anything sends the terms back to them to accept again."
+        : "Changing the offer sends it back to " + b.artistName + " to accept.";
+    $("finSub").textContent = b.artistName + " · " + fmt(b.dateISO);
+    $("finStart").value = t.startsAt ? hhmm(t.startsAt) : "21:00";
+    $("finEnd").value = t.endsAt ? hhmm(t.endsAt) : "23:00";
+    $("finFee").value = euro(t.feeMinor) || "";
+    $("finDep").value = euro(t.depositMinor) || 0;
+    $("finArr").value = hhmm(t.arrivalAt);
+    $("finSc").value = hhmm(t.soundcheckAt);
+    $("finNote").value = t.details || "";
+    $("finStart").required = $("finEnd").required = true;
+    updateBal();
+    finLabel();
+    $("finBg").classList.add("on");
+  }
+
+  function liveSubmitFinalize() {
+    var b = finTarget;
+    var terms = finTerms();
+    if (!terms.startsAt || !terms.endsAt) { toast("Set a start and finish time."); return; }
+    if (terms.endsAt <= terms.startsAt) { toast("The finish time must be after the start."); return; }
+    var job = live.finMode === "confirm" && sameTerms(terms, b.server.terms)
+      ? liveDo(api.confirmBooking(b.server), "Booking confirmed with " + b.artistName + ". It is locked in both calendars.")
+      : liveDo(api.makeOffer(b.server, terms), live.finMode === "confirm"
+          ? "Updated terms sent. " + b.artistName + " needs to accept them before you confirm."
+          : "Offer sent to " + b.artistName + ".");
+    job.then(function (res) { if (res) $("finBg").classList.remove("on"); });
+  }
+
+  /* ---------- live chat ---------- */
+  function liveOpenChat(b) {
+    live.chat = b;
+    live.messages = [];
+    $("chatHead").textContent = state.role === "venue" ? b.artistName : b.venueName;
+    $("chatSub").textContent = "About " + fmt(b.dateISO) + (b.slot ? " · " + b.slot : "");
+    renderChat();
+    $("chatBg").classList.add("on");
+    liveLoadChat();
+  }
+
+  function liveLoadChat() {
+    var b = live.chat;
+    api.thread(b.id).then(function (res) {
+      if (live.chat !== b) return;
+      live.messages = res.messages;
+      renderChat();
+    }).catch(liveError);
+  }
+
+  function liveRenderChat() {
+    var log = $("chatLog");
+    log.innerHTML = "";
+    if (!live.messages.length) log.innerHTML = '<p style="color:var(--faint);font-size:0.85rem;">No messages yet. Say hello and sort the details.</p>';
+    live.messages.forEach(function (m) {
+      var d = document.createElement("div");
+      d.className = "bub " + (m.mine ? "me" : "them");
+      d.innerHTML = esc(m.text) + "<small>" + esc(new Date(m.createdAt).toLocaleString("en-IE", { weekday: "short", hour: "2-digit", minute: "2-digit" })) + "</small>";
+      log.appendChild(d);
+    });
+    log.scrollTop = log.scrollHeight;
+  }
+
+  /* ---------- live suggestion on decline ---------- */
+  function liveSuggest(declinedId, dateISO) {
+    var declined = state.artists.filter(function (a) { return a.id === declinedId; })[0];
+    if (!declined) return;
+    api.discover({ date: dateISO }).then(function (res) {
+      var free = res.artists.map(liveArtist);
+      var alt = free.filter(function (a) {
+        if (a.id === declined.id || a.id === state.profileId) return false;
+        return a.genres.some(function (st) { return declined.genres.indexOf(st) !== -1; }) || a.type === declined.type;
+      })[0];
+      if (!alt) { toast("No similar act is free that night yet."); return; }
+      showSuggestion(declined, alt, dateISO);
+    }).catch(liveError);
+  }
+
   var KEY = "thebook-v1";
   var state;
   /* Older saved state predates links and media. Fill the fields in rather than
@@ -331,8 +791,11 @@
     } catch (e) {}
     return normalise(seedState());
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
-  state = load();
+  function save() {
+    if (LIVE) return; /* the server holds the state */
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  state = LIVE ? liveState() : load();
   function nid() { state.nextId += 1; return state.nextId; }
 
   /* ---------- toast ---------- */
@@ -371,11 +834,13 @@
       b.className = "notif" + (n.read ? "" : " unread");
       b.innerHTML = esc(n.text) + "<small>" + esc(n.ts) + "</small>";
       b.addEventListener("click", function () {
+        if (n.live && !n.read) api.markNotificationRead(n.id).catch(liveError);
         n.read = true;
         save();
         renderBell();
         $("drawer").classList.remove("on");
         showTab(n.tab);
+        if (LIVE && n.suggestFor !== undefined) { liveSuggest(n.suggestFor, n.dateISO); return; }
         if (n.suggestFor !== undefined) {
           var declined = state.artists.filter(function (a) { return a.id === n.suggestFor; })[0];
           if (declined) suggestAlternative(declined, n.dateISO);
@@ -421,7 +886,7 @@
       $("heroTitle").textContent = "Find your next gig";
       $("heroLede").textContent = "Venues across Ireland are looking for live acts. Browse open gig calls and apply.";
       $("listTitle").textContent = "Open gig calls from venues";
-      $("addBtn").textContent = "Create Artist Profile";
+      $("addBtn").textContent = LIVE ? "Edit Act Details" : "Create Artist Profile";
       $("bkTitle").textContent = "Your gigs";
       $("homeLede").textContent = "Get discovered, fill your calendar and manage your gigs — profile, availability, requests and payments context in one place.";
       $("homeRecTitle").textContent = "Open gig calls";
@@ -435,8 +900,8 @@
     renderHome();
     renderProfile();
   }
-  $("roleVenue").addEventListener("click", function () { setRole("venue"); });
-  $("roleArtist").addEventListener("click", function () { setRole("artist"); });
+  $("roleVenue").addEventListener("click", function () { if (LIVE) liveSwitchRole("venue"); else setRole("venue"); });
+  $("roleArtist").addEventListener("click", function () { if (LIVE) liveSwitchRole("artist"); else setRole("artist"); });
 
   /* ---------- onboarding ---------- */
   var onbRole = "venue";
@@ -448,6 +913,23 @@
   });
   $("onbForm").addEventListener("submit", function (e) {
     e.preventDefault();
+    if (LIVE) {
+      api.createProfile({ kind: onbRole, name: $("onbName").value.trim(), county: $("onbCounty").value })
+        .then(function (res) {
+          $("onbBg").classList.remove("on");
+          live.profiles.push(res.profile);
+          return selectProfile(res.profile).then(function () {
+            if (res.profile.kind === "artist") {
+              openArtistDetails();
+              toast("Add your act type, genre and fee so venues can find you.");
+            } else {
+              toast("Your venue is set up. Find an act under Discover.");
+            }
+          });
+        })
+        .catch(liveError);
+      return;
+    }
     state.name = $("onbName").value.trim();
     state.county = $("onbCounty").value;
     state.onboarded = true;
@@ -456,6 +938,12 @@
     renderWho();
     setRole(onbRole);
     toast("You are in. Use the role switch any time to act as the other side of a booking.");
+  });
+
+  /* An extra profile is optional, so that dialog can be dismissed; the
+     first one cannot. */
+  $("onbBg").addEventListener("click", function (e) {
+    if (LIVE && e.target === this && live.profiles.length) this.classList.remove("on");
   });
 
   /* ---------- home ---------- */
@@ -511,6 +999,7 @@
 
   function feeRange(a) {
     if (!a.feeMin) return '<span class="fee">POA <span>rates on request</span></span>';
+    if (a.feeMax === a.feeMin) return '<span class="fee">&euro;' + a.feeMin + " <span>typical booking</span></span>";
     return '<span class="fee">&euro;' + a.feeMin + "&ndash;&euro;" + a.feeMax + " <span>typical booking</span></span>";
   }
 
@@ -530,7 +1019,7 @@
     } else {
       state.gigcalls.filter(function (g) {
         if (county && g.county !== county) return false;
-        if (activeStyle && g.styles.indexOf(activeStyle) === -1) return false;
+        if (activeStyle && g.styles.length && g.styles.indexOf(activeStyle) === -1) return false;
         return true;
       }).forEach(function (g) { host.appendChild(gigCard(g)); });
       if (!host.children.length) host.innerHTML = '<p style="color:var(--faint);grid-column:1/-1;padding:30px 0;">No gig calls match those filters yet. Try widening the search.</p>';
@@ -541,7 +1030,7 @@
     var el = document.createElement("div");
     el.className = "card";
     var rateHtml = a.rating
-      ? '<span class="rate">' + starSvg + a.rating.toFixed(1) + ' <span class="n">(' + a.gigs + ")</span></span>"
+      ? '<span class="rate">' + starSvg + Number(a.rating).toFixed(1) + ' <span class="n">(' + a.gigs + ")</span></span>"
       : '<span class="rate"><span class="n">New on the roster</span></span>';
     /* The whole point is that a publican can hear the act before opening
        anything, so the card says so up front. */
@@ -573,10 +1062,16 @@
         '<p class="card-loc">' + esc(g.bio) + "</p>" +
         '<div class="tags">' + g.styles.map(function (st) { return '<span class="tag">' + esc(st) + "</span>"; }).join("") + "</div>" +
         '<div class="card-foot">' + (g.budget ? '<span class="fee">&euro;' + g.budget + " <span>budget</span></span>" : '<span class="fee">POA <span>budget on request</span></span>') +
-        '<button class="btn btn-gold" type="button">Apply</button></div>' +
+        (g.applied ? '<span class="pill pend">Applied</span>' : '<button class="btn btn-gold" type="button">Apply</button>') + "</div>" +
       "</div>";
+    if (g.applied) return el;
     el.querySelector(".btn").addEventListener("click", function () {
       /* API: create application */
+      if (LIVE) {
+        liveDo(api.applyToGigCall(g.id, "We would love to play your gig on " + fmt(g.dateISO) + "."),
+          "Application sent to " + g.venue + ". Track it under Bookings.");
+        return;
+      }
       var me = state.name || "Your act";
       state.bookings.unshift({
         id: nid(), artistId: -1, artistName: me, venueName: g.venue,
@@ -591,7 +1086,22 @@
     return el;
   }
 
-  $("searchForm").addEventListener("submit", function (e) { e.preventDefault(); renderGrid(); showTab("discover"); });
+  $("searchForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (LIVE && state.role === "venue") {
+      /* Who is free on a date is only known to the server. */
+      api.discover({ county: $("fCounty").value, actType: $("fType") ? $("fType").value : "", genre: activeStyle, date: $("fDate").value })
+        .then(function (res) {
+          state.artists = res.artists.filter(function (a) { return a.id !== state.profileId; }).map(liveArtist);
+          renderGrid();
+          showTab("discover");
+        })
+        .catch(liveError);
+      return;
+    }
+    renderGrid();
+    showTab("discover");
+  });
   $("fCounty").addEventListener("change", renderGrid);
   if ($("fType")) $("fType").addEventListener("change", renderGrid);
   $("fStyle").addEventListener("change", function () { activeStyle = this.value; renderChips(); renderGrid(); });
@@ -609,7 +1119,7 @@
     currentArtist = a;
     $("mTitle").textContent = a.name;
     $("mSub").textContent = a.rating
-      ? a.type + " · Co. " + a.county + " · " + a.rating.toFixed(1) + " rating · " + a.gigs + " gigs through The Book"
+      ? a.type + " · Co. " + a.county + " · " + Number(a.rating).toFixed(1) + " rating · " + a.gigs + (LIVE ? " reviews" : " gigs") + " through The Book"
       : a.type + " · Co. " + a.county + " · new on the roster";
     $("mBio").textContent = a.bio;
     $("mTags").innerHTML = a.genres.map(function (st) { return '<span class="tag">' + esc(st) + "</span>"; }).join("");
@@ -627,6 +1137,18 @@
     if (!currentArtist) return;
     var hint = $("bAvail");
     if (!this.value) { hint.textContent = ""; return; }
+    if (LIVE) {
+      var artist = currentArtist, night = this.value;
+      hint.textContent = "Checking their calendar...";
+      hint.style.color = "var(--faint)";
+      api.discover({ date: night }).then(function (res) {
+        if (artist !== currentArtist || $("bDate").value !== night) return;
+        var free = res.artists.some(function (a) { return a.id === artist.id; });
+        hint.textContent = free ? "Their calendar shows this night as free." : "They are already booked or unavailable that night. Pick another date.";
+        hint.style.color = free ? "var(--ok)" : "var(--pend)";
+      }).catch(function () { hint.textContent = ""; });
+      return;
+    }
     if (isBusy(currentArtist, this.value)) {
       hint.textContent = "Their calendar shows this date as booked. You can still send the request, or pick another date.";
       hint.style.color = "var(--pend)";
@@ -648,6 +1170,21 @@
   $("bookForm").addEventListener("submit", function (e) {
     e.preventDefault();
     /* API: create booking request */
+    if (LIVE) {
+      var night = $("bDate").value;
+      var startsAt = nightInstant(night, $("bStart").value);
+      var endsAt = nightInstant(night, $("bEnd").value);
+      if (!startsAt || !endsAt) { toast("Pick a date, a start and a finish time."); return; }
+      if (endsAt <= startsAt) { toast("The finish time must be after the start."); return; }
+      var target = currentArtist;
+      liveDo(api.createBookingRequest(target.id, night, {
+        startsAt: startsAt, endsAt: endsAt,
+        feeMinor: cents($("bFee").value), depositMinor: 0,
+        details: $("bNote").value.trim()
+      }), "Request sent to " + target.name + ". They will reply under Bookings.")
+        .then(function (res) { if (res) { closeModal(); $("bNote").value = ""; } });
+      return;
+    }
     var d = $("bDate").value;
     var slot = fmtTime($("bStart").value) + " to " + fmtTime($("bEnd").value);
     var note = $("bNote").value.trim();
@@ -675,8 +1212,10 @@
   }
   $("finFee").addEventListener("input", updateBal);
   $("finDep").addEventListener("input", updateBal);
+  $("finForm").addEventListener("input", finLabel);
   function openFinalize(b) {
     finTarget = b;
+    if (LIVE) { liveOpenFinalize(b); return; }
     $("finSub").textContent = b.artistName + " · " + fmt(b.dateISO) + " · " + b.slot;
     $("finFee").value = b.fee || "";
     $("finDep").value = b.dep || 0;
@@ -689,6 +1228,7 @@
     e.preventDefault();
     if (!finTarget) return;
     /* API: confirm booking */
+    if (LIVE) { liveSubmitFinalize(); return; }
     finTarget.fee = clampInt($("finFee").value, finTarget.fee);
     finTarget.dep = clampInt($("finDep").value, 0);
     finTarget.status = "ok";
@@ -709,6 +1249,9 @@
       return genreMatch || a.type === declined.type;
     })[0];
     if (!alt) return;
+    showSuggestion(declined, alt, dateISO);
+  }
+  function showSuggestion(declined, alt, dateISO) {
     sugArtist = alt;
     sugDate = dateISO;
     $("sugSub").textContent = declined.name + " declined your request" + (dateISO ? " for " + fmtLong(dateISO) : "") + ". Based on genre, act type and availability, here is an alternative.";
@@ -731,7 +1274,11 @@
   });
 
   /* ---------- bookings: grouped ---------- */
-  function pillFor(st) {
+  function pillFor(st, label) {
+    if (label) {
+      var gold = st === "acc" ? ' style="color:var(--gold-bright);background:rgba(228,192,92,0.12);"' : "";
+      return '<span class="pill pend"' + gold + ">" + esc(label) + "</span>";
+    }
     if (st === "ok") return '<span class="pill ok">Confirmed</span>';
     if (st === "pend") return '<span class="pill pend">Pending</span>';
     if (st === "acc") return '<span class="pill pend" style="color:var(--gold-bright);background:rgba(228,192,92,0.12);">Accepted</span>';
@@ -750,7 +1297,9 @@
     } else if (state.role === "venue" && b.status === "pend") {
       acts = '<button class="btn btn-line" data-a="bad" type="button">Withdraw</button>';
     }
-    if (group === "done") {
+    if (LIVE && b.server) {
+      acts = liveActionsHtml(b, group);
+    } else if (group === "done") {
       acts = b.rated
         ? '<span class="rated">Rated ' + b.rated + ' of 5</span>'
         : '<button class="btn btn-gold" data-a="rate" type="button">Rate This Gig</button>';
@@ -762,13 +1311,14 @@
       '<div class="who">' + esc(state.role === "venue" ? b.artistName : b.venueName) + "<small>" + esc(b.slot) + "</small></div>" +
       '<div class="when">' + fmt(b.dateISO) + "</div>" +
       '<div class="amt">' + feeTxt + "</div>" +
-      '<div class="acts">' + (group === "done" ? "" : pillFor(b.status)) + acts + "</div>";
+      '<div class="acts">' + (group === "done" ? "" : pillFor(b.status, b.pill)) + acts + "</div>";
     row.querySelectorAll("[data-a]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var a = btn.dataset.a;
         if (a === "fin") { openFinalize(b); return; }
-        if (a === "msg") { openChat(state.role === "venue" ? b.artistName : b.venueName); return; }
+        if (a === "msg") { if (LIVE) liveOpenChat(b); else openChat(state.role === "venue" ? b.artistName : b.venueName); return; }
         if (a === "rate") { openReview(b); return; }
+        if (LIVE) { liveRowAction(b, a); return; }
         /* API: update booking status */
         b.status = a;
         if (a === "acc") {
@@ -793,7 +1343,15 @@
     var host = $("bookingList");
     host.innerHTML = "";
     var t = todayISO();
-    var groups = [
+    var inBucket = function (bucket) {
+      return state.bookings.filter(function (b) { return b.server.bucket === bucket; });
+    };
+    var groups = LIVE ? [
+      { key: "pending", title: "Pending", sub: "Waiting for a response", items: inBucket("pending") },
+      { key: "up", title: "Upcoming", sub: "Confirmed future gigs", items: inBucket("upcoming") },
+      { key: "done", title: "Completed", sub: "Previous gigs", items: inBucket("completed") },
+      { key: "cancelled", title: "Cancelled", sub: "Declined, withdrawn or cancelled", items: inBucket("cancelled") }
+    ] : [
       { key: "pending", title: "Pending", sub: "Waiting for a response", items: state.bookings.filter(function (b) { return b.status === "pend" || b.status === "acc"; }) },
       { key: "up", title: "Upcoming", sub: "Confirmed future gigs", items: state.bookings.filter(function (b) { return b.status === "ok" && b.dateISO >= t; }) },
       { key: "done", title: "Completed", sub: "Previous gigs", items: state.bookings.filter(function (b) { return b.status === "ok" && b.dateISO < t; }) },
@@ -850,6 +1408,12 @@
     e.preventDefault();
     if (!revTarget || !revScore) { toast("Pick a star rating first."); return; }
     /* API: submit review */
+    if (LIVE) {
+      liveDo(api.submitReview(revTarget.server, revScore, $("revNote").value.trim()),
+        "Review submitted. Ratings build trust on both sides of The Book.")
+        .then(function (res) { if (res) $("revBg").classList.remove("on"); });
+      return;
+    }
     revTarget.rated = revScore;
     notify(state.role === "venue" ? "artist" : "venue", (state.role === "venue" ? revTarget.venueName : revTarget.artistName) + " rated your gig on " + fmt(revTarget.dateISO) + ": " + revScore + " of 5.", "bookings");
     save();
@@ -860,6 +1424,7 @@
 
   /* ---------- create profile / gig call ---------- */
   $("addBtn").addEventListener("click", function () {
+    if (LIVE && state.role === "artist") { openArtistDetails(); return; }
     if (state.role === "venue") {
       $("ngVenue").value = state.name || "";
       $("ngCounty").value = state.county || "Meath";
@@ -880,6 +1445,18 @@
   $("newArtForm").addEventListener("submit", function (e) {
     e.preventDefault();
     /* API: create artist profile */
+    if (LIVE) {
+      liveDo(api.updateProfile({
+        name: $("naName").value.trim(),
+        county: $("naCounty").value,
+        actType: $("naType").value,
+        genres: [$("naStyle").value],
+        statedFeeMinor: cents($("naFee").value),
+        bio: $("naBio").value.trim()
+      }), "Act details saved. Venues browsing Discover can now find you.")
+        .then(function (res) { if (res) $("newArtBg").classList.remove("on"); });
+      return;
+    }
     var genre = $("naStyle").value;
     var type = $("naType").value;
     var icons = { "Band": "band", "Solo": "voice", "Duo or trio": "guitar", "DJ": "dj" };
@@ -901,6 +1478,16 @@
   $("newGigForm").addEventListener("submit", function (e) {
     e.preventDefault();
     /* API: create gig call */
+    if (LIVE) {
+      var bio = $("ngBio").value.trim();
+      liveDo(api.createGigCall({
+        eventDate: $("ngDate").value,
+        budgetMinor: cents($("ngBudget").value),
+        details: "Looking for: " + $("ngStyle").value + "." + (bio ? " " + bio : "")
+      }), "Gig call posted. Acts browsing Discover can now apply.")
+        .then(function (res) { if (res) $("newGigBg").classList.remove("on"); });
+      return;
+    }
     state.gigcalls.unshift({
       id: nid(), venue: $("ngVenue").value.trim(), county: $("ngCounty").value,
       dateISO: $("ngDate").value, slot: "Live music", budget: clampInt($("ngBudget").value, 0) || null,
@@ -927,6 +1514,7 @@
     $("chatBg").classList.add("on");
   }
   function renderChat() {
+    if (LIVE) { liveRenderChat(); return; }
     var t = state.threads.filter(function (x) { return x.id === activeThread; })[0];
     if (!t) return;
     var log = $("chatLog");
@@ -946,6 +1534,13 @@
     e.preventDefault();
     var v = $("chatInput").value.trim();
     if (!v) return;
+    if (LIVE) {
+      api.sendMessage(live.chat.id, v).then(function () {
+        $("chatInput").value = "";
+        liveLoadChat();
+      }).catch(liveError);
+      return;
+    }
     var t = state.threads.filter(function (x) { return x.id === activeThread; })[0];
     if (!t) return;
     /* API: send message */
@@ -1078,6 +1673,11 @@
   $("profForm").addEventListener("submit", function (e) {
     e.preventDefault();
     /* API: update profile */
+    if (LIVE) {
+      liveDo(api.updateProfile({ name: $("pfName").value.trim(), county: $("pfCounty").value, bio: $("pfBio").value.trim() }),
+        "Profile saved.");
+      return;
+    }
     state.name = $("pfName").value.trim();
     state.county = $("pfCounty").value;
     state.bio = $("pfBio").value.trim();
@@ -1130,6 +1730,10 @@
 
   /* ---------- reset ---------- */
   $("resetBtn").addEventListener("click", function () {
+    if (LIVE) {
+      if (live.client) live.client.auth.signOut().then(function () { location.reload(); });
+      return;
+    }
     try { localStorage.removeItem(KEY); } catch (e) {}
     location.reload();
   });
@@ -1138,5 +1742,6 @@
   renderWho();
   setRole(state.role);
   showTab("home");
-  if (!state.onboarded) $("onbBg").classList.add("on");
+  if (LIVE) liveStart();
+  else if (!state.onboarded) $("onbBg").classList.add("on");
 })();

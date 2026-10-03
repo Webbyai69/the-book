@@ -8,3 +8,6 @@ server/node_modules/
 server/.env
 server/.env.*
 !server/.env.example
+server/.dev.vars
+server/.wrangler/
+server/.wrangler-dev.log

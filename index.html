@@ -155,7 +155,7 @@
             <label for="pfBio">About</label>
             <textarea id="pfBio" placeholder="A short description shown to the other side of a booking"></textarea>
           </div>
-          <div class="f-full social-block">
+          <div class="f-full social-block demo-only">
             <label for="pfPlatform">Links <span class="hint">up to 6, one per platform</span></label>
             <div id="pfLinkList" class="link-list"></div>
             <div class="link-add">
@@ -165,7 +165,7 @@
             </div>
             <p class="field-msg" id="pfLinkMsg" role="status"></p>
           </div>
-          <div class="f-full social-block" id="pfClipsWrap">
+          <div class="f-full social-block demo-only" id="pfClipsWrap">
             <label for="pfClipPlatform">Clips <span class="hint">up to 4, YouTube, Spotify or SoundCloud</span></label>
             <div id="pfClipList" class="link-list"></div>
             <div class="link-add">
@@ -296,12 +296,39 @@
 </aside>
 
 <!-- ============ ONBOARDING ============ -->
+<!-- ============ SIGN IN (live mode only) ============ -->
+<div class="modal-bg" id="authBg">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="authTitle">Sign in to The Book</h3>
+        <p class="card-loc">Use the same account for your venue and your act.</p>
+      </div>
+    </div>
+    <div class="modal-body">
+      <form class="frm" id="authForm">
+        <div class="f-full">
+          <label for="authEmail">Email</label>
+          <input id="authEmail" type="email" autocomplete="email" required>
+        </div>
+        <div class="f-full">
+          <label for="authPassword">Password</label>
+          <input id="authPassword" type="password" autocomplete="current-password" minlength="8" required>
+        </div>
+        <p class="field-msg f-full" id="authMsg"></p>
+        <div><button class="btn btn-gold btn-wide" type="submit" id="authSignIn">Sign in</button></div>
+        <div><button class="btn btn-line btn-wide" type="button" id="authSignUp">Create account</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="onbBg">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="onbTitle">
     <div class="modal-head">
       <div>
         <h3 id="onbTitle">Welcome to The Book</h3>
-        <p class="card-loc">Set up this device to start booking. You can switch roles at any time to act as the other side.</p>
+        <p class="card-loc" id="onbLede">Set up this device to start booking. You can switch roles at any time to act as the other side.</p>
       </div>
     </div>
     <div class="modal-body">
@@ -378,8 +405,16 @@
       <button class="x" id="finClose" type="button" aria-label="Close">&#215;</button>
     </div>
     <div class="modal-body">
-      <p class="bio">The artist accepted your request. Agree the final price and details to confirm the gig.</p>
+      <p class="bio" id="finIntro">The artist accepted your request. Agree the final price and details to confirm the gig.</p>
       <form class="frm" id="finForm">
+        <div class="live-only">
+          <label for="finStart">Start</label>
+          <input id="finStart" type="time">
+        </div>
+        <div class="live-only">
+          <label for="finEnd">Finish</label>
+          <input id="finEnd" type="time">
+        </div>
         <div>
           <label for="finFee">Agreed price</label>
           <input id="finFee" type="number" min="0" step="10" required>
@@ -402,7 +437,7 @@
           <textarea id="finNote" placeholder="Stage size, PA and sound, parking, meals, payment method"></textarea>
         </div>
         <div class="f-full">
-          <button class="btn btn-gold btn-wide" type="submit">Confirm Booking</button>
+          <button class="btn btn-gold btn-wide" type="submit" id="finSubmit">Confirm Booking</button>
         </div>
       </form>
     </div>
@@ -438,6 +473,8 @@
   <button class="reset-link" id="resetBtn" type="button">Reset demo data on this device</button>
 </footer>
 
+<script src="./config.js"></script>
+<script src="./api.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

@@ -1,0 +1,14 @@
+# Cloudflare Worker for The Book API. Deployed by
+# .github/workflows/deploy-api.yml on every push to main that touches server/.
+name = "the-book-api"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Browser origins allowed to call the API. The deploy workflow overrides
+# this from the ALLOWED_ORIGINS repository variable when it is set.
+ALLOWED_ORIGINS = ""
+
+[observability]
+enabled = true

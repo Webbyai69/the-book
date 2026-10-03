@@ -362,3 +362,7 @@ body { overflow-x: clip; }
   .links-row { gap: 6px; }
   .link-chip { padding: 6px 10px; font-size: 0.72rem; }
 }
+
+/* Live mode (config.js filled in) vs the self-contained demo. */
+body:not(.live) .live-only { display: none; }
+body.live .demo-only { display: none; }
