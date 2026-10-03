@@ -5,6 +5,8 @@ on:
     paths: ["server/**", ".github/workflows/server-tests.yml"]
   pull_request:
     paths: ["server/**", ".github/workflows/server-tests.yml"]
+  # Called by deploy-api.yml so a deploy only follows green tests.
+  workflow_call:
 
 jobs:
   test:

@@ -17,12 +17,22 @@ if (!process.env.TEST_DATABASE_URL) throw new Error("TEST_DATABASE_URL is requir
 
 const SECRET = "test-secret-at-least-32-characters-long!!";
 const pool = createPool(process.env.TEST_DATABASE_URL);
-const handle = createApp({
-  pool,
-  verifyToken: createTokenVerifier({ jwtSecret: SECRET }),
-  allowedOrigins: ["https://the-book.pages.dev"],
-  logger: { error: (e) => console.error("UNEXPECTED", e) }
-});
+/*
+ * API_TEST_URL runs the same tests against a running server instead, e.g.
+ * `wrangler dev` with SUPABASE_JWT_SECRET and ALLOWED_ORIGINS set to the
+ * values above and DATABASE_URL pointing at the test database.
+ */
+const handle = process.env.API_TEST_URL
+  ? (request) => {
+      const url = new URL(request.url);
+      return fetch(new URL(url.pathname + url.search, process.env.API_TEST_URL), request);
+    }
+  : createApp({
+      pool,
+      verifyToken: createTokenVerifier({ jwtSecret: SECRET }),
+      allowedOrigins: ["https://the-book.pages.dev"],
+      logger: { error: (e) => console.error("UNEXPECTED", e) }
+    });
 
 before(async () => {
   const { rows } = await pool.query("SELECT current_database() AS name");

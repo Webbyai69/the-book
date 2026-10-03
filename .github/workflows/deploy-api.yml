@@ -1,0 +1,81 @@
+name: Deploy API
+
+# Every push to main that touches server/ tests the API, applies new
+# database migrations to Supabase, and deploys the Cloudflare Worker.
+#
+# One-time setup (Settings > Secrets and variables > Actions):
+#   Secrets
+#     CLOUDFLARE_API_TOKEN    token with the "Edit Cloudflare Workers" template
+#     CLOUDFLARE_ACCOUNT_ID   from the Cloudflare dashboard sidebar
+#     DATABASE_URL            Supabase transaction pooler string (port 6543),
+#                             used by the Worker
+#     DIRECT_DATABASE_URL     Supabase session pooler string (port 5432),
+#                             used to run migrations
+#     SUPABASE_URL            https://<project-ref>.supabase.co
+#   Variables
+#     ALLOWED_ORIGINS         the site's address, e.g. https://the-book.pages.dev
+
+on:
+  push:
+    branches: [main]
+    paths: ["server/**", ".github/workflows/deploy-api.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/server-tests.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: server
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+    steps:
+      - name: Check setup
+        run: |
+          missing=""
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID DATABASE_URL DIRECT_DATABASE_URL SUPABASE_URL; do
+            eval "value=\${$name:-}"
+            [ -n "$value" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing. See the setup list at the top of .github/workflows/deploy-api.yml."
+            exit 1
+          fi
+          [ -n "$ALLOWED_ORIGINS" ] || echo "::warning::ALLOWED_ORIGINS is not set, so browsers on other domains cannot call the API."
+        working-directory: .
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+
+      - name: Apply database migrations
+        run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+
+      - name: Deploy Worker
+        run: npx wrangler deploy --var "ALLOWED_ORIGINS:${ALLOWED_ORIGINS}"
+
+      - name: Set Worker secrets
+        run: |
+          node -e 'process.stdout.write(JSON.stringify({DATABASE_URL: process.env.DATABASE_URL, SUPABASE_URL: process.env.SUPABASE_URL}))' > "$RUNNER_TEMP/secrets.json"
+          npx wrangler secret bulk "$RUNNER_TEMP/secrets.json"
+          rm -f "$RUNNER_TEMP/secrets.json"

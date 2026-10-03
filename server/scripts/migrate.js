@@ -3,7 +3,7 @@
  *
  *   DATABASE_URL=postgres://... node scripts/migrate.js
  *
- * Applied files are recorded in public.schema_migrations with a checksum. A
+ * Applied files are recorded in book_migrations.applied with a checksum. A
  * file that changes after it was applied aborts the run: migrations are
  * append-only from here on, so fix forward with a new numbered file.
  *
@@ -37,8 +37,11 @@ export async function migrate(connectionString, { log = console.log } = {}) {
     // One runner at a time.
     await client.query("SELECT pg_advisory_lock(hashtext('the-book-migrations'))");
 
+    // Its own schema, not public: Supabase's Data API exposes public.
+    await client.query(`CREATE SCHEMA IF NOT EXISTS book_migrations`);
+    await client.query(`REVOKE ALL ON SCHEMA book_migrations FROM PUBLIC`);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS public.schema_migrations (
+      CREATE TABLE IF NOT EXISTS book_migrations.applied (
         filename text PRIMARY KEY,
         checksum text NOT NULL,
         applied_at timestamptz NOT NULL DEFAULT now()
@@ -46,7 +49,7 @@ export async function migrate(connectionString, { log = console.log } = {}) {
 
     const files = (await readdir(MIGRATIONS_DIR)).filter((f) => /^\d+_.*\.sql$/.test(f)).sort();
     const applied = new Map(
-      (await client.query("SELECT filename, checksum FROM public.schema_migrations")).rows.map(
+      (await client.query("SELECT filename, checksum FROM book_migrations.applied")).rows.map(
         (r) => [r.filename, r.checksum]
       )
     );
@@ -64,7 +67,7 @@ export async function migrate(connectionString, { log = console.log } = {}) {
         const present = (await client.query(probe)).rows[0];
         if (!Object.values(present)[0]) break;
         await client.query(
-          "INSERT INTO public.schema_migrations (filename, checksum) VALUES ($1, $2)",
+          "INSERT INTO book_migrations.applied (filename, checksum) VALUES ($1, $2)",
           [file, sources.get(file).checksum]
         );
         applied.set(file, sources.get(file).checksum);
@@ -90,7 +93,7 @@ export async function migrate(connectionString, { log = console.log } = {}) {
       log(`applying ${file}`);
       await client.query(sql);
       await client.query(
-        "INSERT INTO public.schema_migrations (filename, checksum) VALUES ($1, $2)",
+        "INSERT INTO book_migrations.applied (filename, checksum) VALUES ($1, $2)",
         [file, checksum]
       );
       ran += 1;

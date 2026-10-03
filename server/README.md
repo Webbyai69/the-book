@@ -27,9 +27,39 @@ npm run test:sql            # SQL harnesses for the schema rules
 GitHub Actions runs both on every push that touches `server/`
 (`.github/workflows/server-tests.yml`).
 
+## Deploying (Supabase + Cloudflare)
+
+Pushing to `main` deploys automatically (`.github/workflows/deploy-api.yml`):
+tests run, new migrations are applied to Supabase, then the API is deployed as
+the Cloudflare Worker `the-book-api`. It is served at
+`https://the-book-api.<your-subdomain>.workers.dev/api`.
+
+One-time setup:
+
+1. **Supabase.** Create a project (region: West EU / Ireland). From
+   *Connect* at the top of the project dashboard, copy two connection strings
+   with your database password filled in: the **Transaction pooler**
+   (port 6543) and the **Session pooler** (port 5432). The project URL is
+   `https://<project-ref>.supabase.co`.
+2. **Cloudflare.** Create an API token from the *Edit Cloudflare Workers*
+   template (My Profile > API Tokens), and copy your Account ID from the
+   Workers & Pages overview.
+3. **GitHub.** In the repository's Settings > Secrets and variables > Actions,
+   add the secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+   `DATABASE_URL` (transaction pooler), `DIRECT_DATABASE_URL` (session
+   pooler) and `SUPABASE_URL`, and the variable `ALLOWED_ORIGINS` (the site's
+   address, e.g. `https://the-book.pages.dev`).
+4. Run the *Deploy API* workflow from the Actions tab (or push to `main`).
+
+The tables live in the `book` schema, which Supabase does not expose through
+its Data API; only this API can read or write them.
+
+To check the Worker build locally against a test database:
+`sh scripts/test-worker.sh` runs the API tests inside `wrangler dev`.
+
 ## Migrations
 
-`npm run migrate` records each applied file in `public.schema_migrations` with
+`npm run migrate` records each applied file in `book_migrations.applied` with
 a checksum, and refuses to run if an applied file has since been edited.
 Migrations are append-only: fix forward with a new numbered file. A database
 migrated by hand before the runner existed is detected and baselined.
@@ -80,6 +110,7 @@ morning. One artist, one confirmed booking per night.
 
 ```
 src/app.js                 Node entry point
+src/worker.js              Cloudflare Worker entry point
 src/http/app.js            routes -> services, as a fetch-style (Request) => Response handler
 src/http/auth.js           Supabase token verification, users table sync
 src/services/              booking lifecycle, confirmation, gig calls, profiles,
@@ -88,5 +119,5 @@ src/db/                    pool, shared command envelope, events, error mapping
 migrations/                schema, applied in order by scripts/migrate.js
 ```
 
-The handler uses only web-standard `Request`/`Response`, so the same code can
-run in a Cloudflare Worker.
+The handler uses only web-standard `Request`/`Response`, so the same code runs
+under Node and in the Cloudflare Worker.
