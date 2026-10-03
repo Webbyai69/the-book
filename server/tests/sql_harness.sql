@@ -90,7 +90,7 @@ BEGIN
   END;
 END $$;
 
-\echo '=== T4: booking identity and date are immutable ==='
+\echo '=== T4: booking participants are immutable; the date only follows the terms ==='
 DO $$
 DECLARE v record; a record; a2 record; b uuid; d date := current_date + 33;
 BEGIN

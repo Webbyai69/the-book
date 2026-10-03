@@ -30,10 +30,6 @@ const UNIQUE_VIOLATIONS = {
     "ARTIST_UNAVAILABLE",
     "The artist is no longer available on this date."
   ],
-  bookings_confirmed_artist_date: [
-    "ARTIST_UNAVAILABLE",
-    "The artist is no longer available on this date."
-  ],
   bookings_confirmed_artist_session: [
     "ARTIST_UNAVAILABLE",
     "The artist is no longer available that night."
@@ -45,6 +41,17 @@ const UNIQUE_VIOLATIONS = {
   bookings_one_application: [
     "APPLICATION_ALREADY_EXISTS",
     "Your act has already applied for this gig call. Open the existing application under Bookings."
+  ],
+  reviews_pkey: [
+    "REVIEW_ALREADY_SUBMITTED",
+    "You have already reviewed this booking."
+  ]
+};
+
+const FOREIGN_KEY_VIOLATIONS = {
+  bookings_gig_call_session_fkey: [
+    "OFFER_NOT_ON_GIG_NIGHT",
+    "The start time must fall on the night this gig call advertises (sets before 06:00 count as the night before)."
   ]
 };
 
@@ -58,7 +65,20 @@ export function translateDatabaseError(error) {
     return conflict("CONFLICT", "This action conflicts with an existing record.");
   }
 
+  if (error.code === "23503") {
+    const mapped = FOREIGN_KEY_VIOLATIONS[error.constraint];
+    if (mapped) return conflict(mapped[0], mapped[1]);
+
+    return conflict("CONFLICT", "This action refers to a record that does not exist.");
+  }
+
   if (error.code === "23514") {
+    // RAISE EXCEPTION in our own triggers carries no constraint name and a
+    // message written for people (the 06:00 rule, immutable terms). A named
+    // CHECK constraint's message is a schema detail, so it stays generic.
+    if (!error.constraint && error.message) {
+      return conflict("INVALID_BOOKING_STATE", error.message);
+    }
     return conflict(
       "INVALID_BOOKING_STATE",
       "The booking does not satisfy the required rules for this action."
@@ -72,6 +92,11 @@ export function translateDatabaseError(error) {
       "RETRY_REQUIRED",
       "The booking changed concurrently. Retry using the same idempotency key."
     );
+  }
+
+  // Malformed input that reached the database: bad uuid, date, number.
+  if (error.code === "22P02" || error.code === "22007" || error.code === "22008" || error.code === "22003") {
+    return new HttpError(400, "INVALID_INPUT", "One of the values sent is not valid.");
   }
 
   return error;

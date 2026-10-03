@@ -6,10 +6,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node --env-file=.env src/app.js",
-    "test": "node --env-file=.env --test tests/*.test.js"
+    "start": "node --env-file-if-exists=.env src/app.js",
+    "migrate": "node --env-file-if-exists=.env scripts/migrate.js",
+    "test": "node --env-file-if-exists=.env --test tests/*.test.js",
+    "test:sql": "sh tests/run-sql-harnesses.sh"
   },
   "dependencies": {
+    "jose": "^6.2.12",
     "pg": "^8.13.0"
   }
 }

@@ -46,11 +46,15 @@ styles.css      design system: deep green and gold identity, all components
 app.js          app engine: state, persistence, rendering, booking lifecycle
 book-logo.jpg   harp roundel, used on the home hero
 book-mark.jpg   harp roundel, used in the header and footer
+api.js          browser client for the API (not yet loaded by index.html)
+server/         the API, database migrations and tests
 ```
 
-## Connecting a real backend
+## Backend
 
-The prototype keeps every read and write behind one `state` object in `app.js`, persisted through `load()` and `save()`. Every mutation point that a server should own is marked with an `API:` comment (create booking, update status, send message, create profile, create gig call, submit review). Replacing localStorage with API calls at those points converts this UI into the real product without redesigning screens. A production build additionally needs accounts and authentication, a database, push notifications, and media uploads for artist photos and videos.
+The API lives in `server/`: Node 22, PostgreSQL and Supabase sign-in. It covers profiles, discovery with real availability, the full booking lifecycle, gig calls, messages, reviews, notifications and availability blocks. See `server/README.md` for setup, tests and the endpoint list.
+
+The front end has not been switched over yet: `app.js` still keeps its state in localStorage. `api.js` is the browser client for the API; replacing `load()`, `save()` and the mutation points marked `API:` in `app.js` with its calls connects the two without redesigning screens.
 
 ## Roadmap ideas
 
