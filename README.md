@@ -46,15 +46,33 @@ styles.css      design system: deep green and gold identity, all components
 app.js          app engine: state, persistence, rendering, booking lifecycle
 book-logo.jpg   harp roundel, used on the home hero
 book-mark.jpg   harp roundel, used in the header and footer
-api.js          browser client for the API (not yet loaded by index.html)
+config.js       empty = demo mode; filled in = live mode (see below)
+api.js          browser client for the API
 server/         the API, database migrations and tests
 ```
 
 ## Backend
 
-The API lives in `server/`: Node 22, PostgreSQL and Supabase sign-in. It covers profiles, discovery with real availability, the full booking lifecycle, gig calls, messages, reviews, notifications and availability blocks. See `server/README.md` for setup, tests and the endpoint list.
+The API lives in `server/`: Node 22, PostgreSQL and Supabase sign-in, deployed to Cloudflare Workers. It covers profiles, discovery with real availability, the full booking lifecycle, gig calls, messages, reviews, notifications and availability blocks. See `server/README.md` for setup, tests and the endpoint list.
 
-The front end has not been switched over yet: `app.js` still keeps its state in localStorage. `api.js` is the browser client for the API; replacing `load()`, `save()` and the mutation points marked `API:` in `app.js` with its calls connects the two without redesigning screens.
+## Live mode
+
+`config.js` decides how the site runs:
+
+- **All three values empty (the default):** the self-contained demo described above, with everything stored in the browser.
+- **All three filled in:** the live app. Visitors sign in with Supabase, and every screen reads and writes through the API. The Venue and Artist switch moves between the profiles your account owns, and offers to create the other one.
+
+```js
+window.THE_BOOK_CONFIG = {
+  apiBase: "https://the-book-api.<your-subdomain>.workers.dev/api",
+  supabaseUrl: "https://<project-ref>.supabase.co",
+  supabaseAnonKey: "<anon public key>"
+};
+```
+
+The anon key is public by design; the API verifies every request itself. In Supabase, under Authentication > URL Configuration, set the Site URL to the site's address so confirmation emails link back to it. Then add that same address to the API's `ALLOWED_ORIGINS`.
+
+Not yet stored on the server, so hidden in live mode: profile links and clips. Venues cannot yet see or cancel their own gig calls from the site (the API supports cancelling).
 
 ## Roadmap ideas
 

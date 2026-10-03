@@ -18,7 +18,8 @@
 (function (global) {
   "use strict";
 
-  var API_BASE = global.THE_BOOK_API_BASE || "/api";
+  var CONFIG = global.THE_BOOK_CONFIG || {};
+  var API_BASE = (CONFIG.apiBase || global.THE_BOOK_API_BASE || "/api").replace(/\/+$/, "");
 
   /* ---------- session ----------
      accessToken comes from Supabase Auth in the browser. profileId is
@@ -34,11 +35,17 @@
 
   function setSession(next) {
     if (next.profileId !== session.profileId) epoch += 1;
-    session = { accessToken: next.accessToken, profileId: next.profileId };
+    session = { accessToken: next.accessToken || null, profileId: next.profileId || null };
     return epoch;
   }
 
   function currentEpoch() { return epoch; }
+
+  /* Supabase refreshes its access token roughly hourly. Asking for the
+     token on every request, rather than storing one, means a long-open
+     tab never sends an expired token. */
+  var tokenProvider = null;
+  function setTokenProvider(fn) { tokenProvider = fn; }
 
   /* ---------- errors ---------- */
 
@@ -81,9 +88,16 @@
     options = options || {};
     var requestEpoch = epoch;
 
+    var token = tokenProvider ? Promise.resolve(tokenProvider()) : Promise.resolve(session.accessToken);
+    return token.then(function (accessToken) {
+      return send(method, path, options, requestEpoch, accessToken);
+    });
+  }
+
+  function send(method, path, options, requestEpoch, accessToken) {
     var headers = { Accept: "application/json" };
 
-    if (session.accessToken) headers.Authorization = "Bearer " + session.accessToken;
+    if (accessToken) headers.Authorization = "Bearer " + accessToken;
     if (session.profileId) headers["X-Profile-Id"] = session.profileId;
     if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
     if (options.body) headers["Content-Type"] = "application/json";
@@ -168,6 +182,7 @@
   }
 
   function discover(filters) {
+    filters = filters || {};
     var params = [];
     if (filters.county) params.push("county=" + encodeURIComponent(filters.county));
     if (filters.actType) params.push("actType=" + encodeURIComponent(filters.actType));
@@ -289,6 +304,24 @@
     return mutate("profile:" + session.profileId, "PATCH", "/profiles/" + session.profileId, patch);
   }
 
+  /* The signed-in user's profiles. Needs no profile selected. */
+  function me() { return request("GET", "/me"); }
+
+  function createProfile(fields) {
+    return mutate("create-profile:" + fields.kind + ":" + fields.name, "POST", "/profiles", fields);
+  }
+
+  function createGigCall(fields) {
+    return mutate("gig-call:" + fields.eventDate, "POST", "/gig-calls", fields);
+  }
+
+  function cancelGigCall(gigCallId) {
+    return mutate("cancel-gig-call:" + gigCallId, "POST", "/gig-calls/" + gigCallId + "/cancel", {});
+  }
+
+  function blockNight(date) { return request("PUT", "/availability/" + date, { idempotencyKey: "block:" + date }); }
+  function unblockNight(date) { return request("DELETE", "/availability/" + date, { idempotencyKey: "unblock:" + date }); }
+
   function markNotificationRead(id) {
     return mutate("notif:" + id, "POST", "/notifications/" + id + "/read", {});
   }
@@ -324,10 +357,13 @@
 
   global.TheBookApi = {
     setSession: setSession,
+    setTokenProvider: setTokenProvider,
     currentEpoch: currentEpoch,
+    configured: !!(CONFIG.apiBase && CONFIG.supabaseUrl && CONFIG.supabaseAnonKey),
     ApiError: ApiError,
     isStale: isStale,
 
+    me: me,
     bootstrap: bootstrap,
     discover: discover,
     gigCalls: gigCalls,
@@ -335,6 +371,11 @@
     thread: thread,
     notifications: notifications,
 
+    createProfile: createProfile,
+    createGigCall: createGigCall,
+    cancelGigCall: cancelGigCall,
+    blockNight: blockNight,
+    unblockNight: unblockNight,
     createBookingRequest: createBookingRequest,
     applyToGigCall: applyToGigCall,
     makeOffer: makeOffer,
